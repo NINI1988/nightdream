@@ -1,0 +1,65 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ master ]
+    tags:
+      - '*'
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Test & Build noGmsRelease
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TZ: Europe/Berlin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Run Unit Tests (noGmsDebug)
+        run: ./gradlew testNoGmsDebugUnitTest --info
+
+      - name: Upload Test Report on Failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testNoGmsDebugUnitTest/
+
+      - name: Build APK (noGmsRelease)
+        run: ./gradlew assembleNoGmsRelease
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: nightdream-noGms-release
+          path: app/build/outputs/apk/noGms/release/*.apk
+          retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: app/build/outputs/apk/noGms/release/*.apk
+          generate_release_notes: true

@@ -43,7 +43,7 @@ public class WeatherEntryTest {
     public void setUp() {
         weatherEntry = new WeatherEntry();
         // A specific timestamp for testing: 2023-10-27 12:00:00 UTC
-        testTimestampEpochSecond = 1698393600L;
+        testTimestampEpochSecond = Instant.parse("2023-10-27T12:00:00Z").getEpochSecond();
         testLat = 52.5200f; // Berlin latitude
         testLon = 13.4050f; // Berlin longitude
 
@@ -111,7 +111,6 @@ public class WeatherEntryTest {
         // Sunset around 17:39 (CEST -> CET transition on Oct 29)
 
         // Test during the day (e.g., 12:00 UTC, which is 14:00 in Berlin in Oct, CEST)
-        weatherEntry.timestamp = 1698393600L; // 2023-10-27 12:00:00 UTC
         weatherEntry.lat = 52.5200f; // Berlin latitude
         weatherEntry.lon = 13.4050f; // Berlin longitude
 
@@ -124,17 +123,17 @@ public class WeatherEntryTest {
         weatherEntry.sunsetTime = explicitSunsetMillis / 1000;
 
         // Scenario 1: Daytime (12:00 UTC / 14:00 Berlin time)
-        weatherEntry.timestamp = 1698393600L; // 2023-10-27 12:00:00 UTC
+        weatherEntry.timestamp = Instant.parse("2023-10-27T12:00:00Z").getEpochSecond();
         assertFalse("Should be day at 14:00 Berlin time", weatherEntry.isNight());
 
         // Scenario 2: Nighttime (after sunset, e.g., 20:00 UTC / 22:00 Berlin time)
-        weatherEntry.timestamp = 1698412800L; // 2023-10-27 20:00:00 UTC
+        weatherEntry.timestamp = Instant.parse("2023-10-27T20:00:00Z").getEpochSecond();
         assertTrue("Should be night at 22:00 Berlin time", weatherEntry.isNight());
 
         // Scenario 3: Nighttime (before sunrise, e.g., 03:00 UTC / 05:00 Berlin time on the *same calendar day*)
         // Note: For suncalc, sunrise/sunset times are for the *day* of the timestamp.
         // If the current timestamp is before the calculated sunrise of the *same day*, it's considered night.
-        weatherEntry.timestamp = 1698364800L; // 2023-10-27 03:00:00 UTC
+        weatherEntry.timestamp = Instant.parse("2023-10-27T03:00:00Z").getEpochSecond();
         assertTrue("Should be night at 05:00 Berlin time (before sunrise)", weatherEntry.isNight());
 
         // Scenario 4: Exactly at sunrise (should be day)
@@ -148,7 +147,7 @@ public class WeatherEntryTest {
         // Scenario 6: Invalid sunrise/sunset (should return false)
         weatherEntry.sunriseTime = 0L;
         weatherEntry.sunsetTime = 0L;
-        weatherEntry.timestamp = 1698393600L; // Daytime timestamp
+        weatherEntry.timestamp = Instant.parse("2023-10-27T12:00:00Z").getEpochSecond();
         assertFalse("Should return false if sunrise/sunset are invalid", weatherEntry.isNight());
     }
 }

@@ -3,6 +3,8 @@ name: Android CI
 on:
   push:
     branches: [ master ]
+    tags:
+      - '*'
   pull_request:
     branches: [ master ]
   workflow_dispatch:
@@ -15,6 +17,8 @@ jobs:
   build:
     name: Test & Build noGmsRelease
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       TZ: Europe/Berlin
 
@@ -45,10 +49,17 @@ jobs:
       - name: Build APK (noGmsRelease)
         run: ./gradlew assembleNoGmsRelease
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         if: success()
         with:
           name: nightdream-noGms-release
           path: app/build/outputs/apk/noGms/release/*.apk
           retention-days: 14
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: app/build/outputs/apk/noGms/release/*.apk
+          generate_release_notes: true

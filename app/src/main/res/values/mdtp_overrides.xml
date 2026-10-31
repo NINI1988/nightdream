@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="mdtp_text_size_multiplier_inner" type="string">0.20</item>
+    <item name="mdtp_text_size_multiplier_normal" type="string">0.25</item>
+    <item name="mdtp_text_size_multiplier_outer" type="string">0.18</item>
+
+    <!-- <item name="mdtp_numbers_radius_multiplier_normal" format="float" type="string" translatable="false">0.81</item> -->
+    <item name="mdtp_numbers_radius_multiplier_inner" format="float" type="string" translatable="false">0.55</item>
+    <!-- <item name="mdtp_numbers_radius_multiplier_outer" format="float" type="string" translatable="false">0.83</item> -->
+</resources>

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <dimen name="mdtp_picker_dimen">260dp</dimen>
+    <dimen name="mdtp_time_picker_height">260dp</dimen>
     <dimen name="weather_icon_text_size">35sp</dimen>
     <dimen name="weather_icon_height">40dp</dimen>
 </resources>

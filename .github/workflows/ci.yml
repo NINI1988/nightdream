@@ -26,8 +26,8 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Run Unit Tests (noGmsRelease)
-        run: ./gradlew testNoGmsReleaseUnitTest
+      - name: Run Unit Tests (noGmsDebug)
+        run: ./gradlew testNoGmsDebugUnitTest
 
       - name: Build APK (noGmsRelease)
         run: ./gradlew assembleNoGmsRelease

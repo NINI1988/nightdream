@@ -61,6 +61,7 @@ import com.firebirdberlin.nightdream.events.OnRadioStreamReadyForPlayback;
 import com.firebirdberlin.nightdream.events.OnRadioStreamStarted;
 import com.firebirdberlin.nightdream.events.OnRadioStreamStopped;
 import com.firebirdberlin.nightdream.services.RadioStreamService;
+import com.firebirdberlin.nightdream.services.AlarmWifiService;
 import com.firebirdberlin.radiostreamapi.models.FavoriteRadioStations;
 import com.firebirdberlin.radiostreamapi.models.RadioStation;
 import com.google.android.gms.cast.framework.CastButtonFactory;
@@ -93,6 +94,7 @@ public class WebRadioLayout extends RelativeLayout {
             showMetaTitle(metaTitle);
         } else if (event instanceof OnRadioStreamStopped) {
             Log.d(TAG, "AppEventBus - OnRadioStreamStopped");
+            AlarmWifiService.restoreAfterManualRadio(getContext());
             metaTitle = null;
             updateText();
             setShowConnectingHint(false);
@@ -107,6 +109,7 @@ public class WebRadioLayout extends RelativeLayout {
     private int textColor = -1;
     private int maxNumButtons = 0;
     private Integer activeStationIndex;
+    private int networkStartRequestId;
     private final OnClickListener buttonOnClickListener = new OnClickListener() {
         @Override
         public void onClick(final View v) {
@@ -352,6 +355,32 @@ public class WebRadioLayout extends RelativeLayout {
     private void stopRadioStream() {
         if (RadioStreamService.streamingMode == RadioStreamService.StreamingMode.RADIO) {
             RadioStreamService.stop(context);
+            AlarmWifiService.restoreAfterManualRadio(context);
+        }
+    }
+
+    private void startRadioStream(int radioStationIndex) {
+        int requestId = ++networkStartRequestId;
+        boolean wifiActivationPending = AlarmWifiService.prepareForManualRadio(context);
+        if (wifiActivationPending || !Utility.hasNetworkConnection(context)) {
+            AlarmWifiService.runWhenNetworkAvailable(
+                    context,
+                    () -> {
+                        if (requestId == networkStartRequestId) {
+                            RadioStreamService.startStream(context, radioStationIndex);
+                        }
+                    },
+                    () -> showNoDataConnection(requestId)
+            );
+        } else {
+            RadioStreamService.startStream(context, radioStationIndex);
+        }
+    }
+
+    private void showNoDataConnection(int requestId) {
+        if (requestId == networkStartRequestId) {
+            Toast.makeText(context, R.string.message_no_data_connection, Toast.LENGTH_LONG)
+                    .show();
         }
     }
 
@@ -363,14 +392,21 @@ public class WebRadioLayout extends RelativeLayout {
     private void toggleRadioStreamState(final int radioStationIndex) {
         boolean wasAlreadyPlaying = false;
         if (RadioStreamService.streamingMode == RadioStreamService.StreamingMode.RADIO) {
-            RadioStreamService.stop(context);
+            stopRadioStream();
             wasAlreadyPlaying = true;
+        }
+
+        boolean wifiActivationPending = AlarmWifiService.prepareForManualRadio(context);
+        if (wifiActivationPending || (settings.radioStreamActivateWiFi
+                && !Utility.hasNetworkConnection(context))) {
+            startRadioStream(radioStationIndex);
+            return;
         }
 
         if (Utility.hasNetworkConnection(context)) {
             // is stream was already playing before, don't ask again? (but what if user switched from wifi to 3g since stream start?)
             if (Utility.hasFastNetworkConnection(context) || wasAlreadyPlaying) {
-                RadioStreamService.startStream(context, radioStationIndex);
+                startRadioStream(radioStationIndex);
             } else {
                 new AlertDialog.Builder(context, R.style.DialogTheme)
                         .setTitle(R.string.message_mobile_data_connection)
@@ -378,7 +414,7 @@ public class WebRadioLayout extends RelativeLayout {
                         .setNegativeButton(android.R.string.no, (dialogInterface, i) -> hideSystemUI())
                         .setIcon(R.drawable.ic_attention)
                         .setPositiveButton(android.R.string.yes, (dialog, which) -> {
-                            RadioStreamService.startStream(context, radioStationIndex);
+                            startRadioStream(radioStationIndex);
                             hideSystemUI();
                         })
                         .show();
@@ -416,6 +452,7 @@ public class WebRadioLayout extends RelativeLayout {
 
     @Override
     protected void onDetachedFromWindow() {
+        networkStartRequestId++;
         super.onDetachedFromWindow();
         AppEventBus.removeListener(eventListener);
         unregisterAudioVolumeContentObserver();

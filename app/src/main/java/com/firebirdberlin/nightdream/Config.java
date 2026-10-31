@@ -35,5 +35,6 @@ public class Config {
     public final static String NOTIFICATION_CHANNEL_ID_DEVMSG = "com.firebirdberlin.nightdream.notification_channel_devmsg";
 
     public final static int JOB_ID_ALARM_NOTIFICATION = 2000;
+    public final static int JOB_ID_ALARM_WIFI = 2001;
 
 }

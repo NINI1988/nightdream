@@ -81,6 +81,7 @@ import com.firebirdberlin.nightdream.services.CheckChargingStateJob;
 import com.firebirdberlin.nightdream.services.DownloadWeatherModel;
 import com.firebirdberlin.nightdream.services.DownloadWeatherService;
 import com.firebirdberlin.nightdream.services.RadioStreamService;
+import com.firebirdberlin.nightdream.services.AlarmWifiService;
 import com.firebirdberlin.nightdream.services.ScreenWatcherService;
 import com.firebirdberlin.nightdream.services.SqliteIntentService;
 import com.firebirdberlin.nightdream.ui.BottomPanelLayout;
@@ -670,7 +671,10 @@ public class NightDreamActivity extends BillingHelperActivity
 
         BottomPanelLayout.Panel panel = bottomPanelLayout.getActivePanel();
         if (panel == BottomPanelLayout.Panel.WEB_RADIO) {
-            if (RadioStreamService.isRunning) RadioStreamService.stop(this);
+            if (RadioStreamService.isRunning) {
+                RadioStreamService.stop(this);
+                AlarmWifiService.restoreAfterManualRadio(this);
+            }
             bottomPanelLayout.setActivePanel(BottomPanelLayout.Panel.ALARM_CLOCK);
             RadioStreamService.isRunning = false;
         } else {

@@ -346,6 +346,17 @@ OR
     <string name="radio_stream_require_wifi_desc">If on, alarms will play web radio streams only with an established WiFi connection.</string>
     <string name="radio_stream_search">Search</string>
     <string name="radio_stream_unreachable_url">The URL is not reachable.</string>
+    <string name="radio_stream_wifi_after_alarm">WiFi after radio alarm</string>
+    <string name="radio_stream_wifi_after_alarm_always_off">always off</string>
+    <string name="radio_stream_wifi_after_alarm_keep_on">leave on</string>
+    <string name="radio_stream_wifi_after_alarm_restore">restore previous state</string>
+    <string name="display">Display</string>
+    <string name="show_smart_home_menu">Show Smart Home button</string>
+    <string name="show_weather_menu">Show weather button</string>
+    <string name="show_wifi_status">Show WiFi status</string>
+    <string name="wifi_status_connected">WiFi</string>
+    <string name="wifi_status_connecting">WiFi…</string>
+    <string name="wifi_status_off">WiFi off</string>
     <string name="rate">Rate this app</string>
     <string name="rate_summary">We would like to know if you like our app</string>
     <string name="recommend">Recommend app</string>

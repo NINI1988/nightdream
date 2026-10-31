@@ -2,10 +2,14 @@ name: Android CI
 
 on:
   push:
-    branches: [ '**' ]
+    branches: [ master ]
   pull_request:
-    branches: [ '**' ]
+    branches: [ master ]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -27,7 +31,14 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Unit Tests (noGmsDebug)
-        run: ./gradlew testNoGmsDebugUnitTest
+        run: ./gradlew testNoGmsDebugUnitTest --info
+
+      - name: Upload Test Report on Failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: unit-test-report
+          path: app/build/reports/tests/testNoGmsDebugUnitTest/
 
       - name: Build APK (noGmsRelease)
         run: ./gradlew assembleNoGmsRelease

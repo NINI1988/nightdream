@@ -115,6 +115,7 @@ dependencies {
     implementation 'androidx.media3:media3-exoplayer-hls:1.11.1'
     implementation 'com.google.android.flexbox:flexbox:3.0.0'
     implementation 'com.google.android.material:material:1.14.0'
+    implementation 'com.wdullaer:materialdatetimepicker:4.2.3'
     implementation 'com.google.code.gson:gson:2.15.0'
 
     // Third-party Libraries

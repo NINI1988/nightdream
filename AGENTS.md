@@ -195,3 +195,9 @@ Bump version
 ```
 
 Replace the version numbers and codes with the actual previous and current versions.
+
+## Local Development Paths
+
+- Android SDK: `G:\Programme\AndroidSdk`
+- Android Studio JDK: `G:\Programme\AndroidStudio\jbr`
+- Gradle: use the project-local wrapper `.\gradlew.bat`

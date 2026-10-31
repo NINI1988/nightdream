@@ -1,4 +1,4 @@
-# nightdream
+﻿# nightdream
 Open-source clock, screensaver & radio with dynamic brightness & custom features. Trusted and actively developed since 2013.
 
 <div align="center" style="display: flex; gap: 12px; justify-content: center; align-items: center;">
@@ -39,6 +39,9 @@ Show current weather and a 5-day forecast from providers like OpenWeatherMap, Br
 
 ## Extra Features
 * Built-in flashlight.
+
+## In-App Backup & Restore
+Settings and alarms can also be exported and imported directly within the app via .ndb files in **Settings > Backup & Restore**.
 
 ## Open Source & Donations
 Nightdream is free, open-source software. The source code is available for review. Support development through donations.

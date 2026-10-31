@@ -21,7 +21,6 @@ package com.firebirdberlin.nightdream;
 import android.animation.LayoutTransition;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
-import android.app.TimePickerDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -53,6 +52,8 @@ import com.firebirdberlin.nightdream.services.SqliteIntentService;
 import com.firebirdberlin.nightdream.ui.AlarmClockLayout;
 import com.firebirdberlin.radiostreamapi.models.FavoriteRadioStations;
 import com.google.android.material.snackbar.Snackbar;
+import com.wdullaer.materialdatetimepicker.time.TimePickerDialog;
+import com.wdullaer.materialdatetimepicker.time.TimePickerDialog.OnTimeSetListener;
 
 import com.firebirdberlin.nightdream.events.AppEventBus;
 
@@ -235,13 +236,7 @@ public class SetAlarmClockActivity extends BillingHelperActivity {
 
     private void showTimePicker(int hour, int min, boolean recurring, final Long entry_id) {
         final Context context = this;
-        TimePickerDialog mTimePicker = new TimePickerDialog(
-                context, R.style.DialogTheme,
-                (timePicker, selectedHour, selectedMinute) -> {
-                    // Bug Android 4.1: Dialog is submitted twice
-                    // >> ignore second call to this method.
-                    if (!timePicker.isShown()) return;
-
+        OnTimeSetListener listener = (view, selectedHour, selectedMinute, selectedSecond) -> {
                     SimpleTime entry = null;
                     boolean isNew = (entry_id == null);
                     if (isNew) {
@@ -275,12 +270,12 @@ public class SetAlarmClockActivity extends BillingHelperActivity {
                         }
                     }
                     WakeUpReceiver.schedule(context, db);
-                },
-                hour, min, Utility.is24HourFormat(context));
-        // fix broken dialog appearance on some devices
-        mTimePicker.setTitle(null);
-        mTimePicker.getWindow().setBackgroundDrawableResource(R.drawable.border_dialog);
-        mTimePicker.show();
+                };
+        TimePickerDialog timePicker = TimePickerDialog.newInstance(
+                listener, hour, min, Utility.is24HourFormat(context));
+        timePicker.setVersion(TimePickerDialog.Version.VERSION_1);
+        timePicker.setThemeDark(true);
+        timePicker.show(getSupportFragmentManager(), "timePicker");
     }
 
     private void showDatePicker(long timestamp, final Long entry_id) {

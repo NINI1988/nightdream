@@ -27,6 +27,8 @@
 ## Build Flavors
 
 - There are two flavors: `full` (with Google Play Services) and `noGms`.
+- For local builds, installation and testing, use `noGms` by default. Ignore the `full`
+  flavor unless the user explicitly asks for it.
 - Shared code (`src/main`) must **not** reference Google Play Services, Billing, Cast or
   Play Review classes. Put such code in `src/full` and provide an alternative or stub in
   `src/noGms`.

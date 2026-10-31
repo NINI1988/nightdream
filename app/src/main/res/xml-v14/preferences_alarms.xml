@@ -79,7 +79,7 @@
             app:title="@string/snoozeTime"
             seekbar:interval="1"
             seekbar:max="60"
-            seekbar:min="5"
+            seekbar:min="1"
             seekbar:unitsLeft=""
             seekbar:unitsRight="min"/>
 
@@ -157,6 +157,21 @@
             app:key="radioStreamRequireWiFi"
             app:summary="@string/radio_stream_require_wifi_desc"
             app:title="@string/radio_stream_require_wifi" />
+
+        <SwitchPreferenceCompat
+            app:iconSpaceReserved="false"
+            app:defaultValue="false"
+            app:key="radioStreamActivateWiFi"
+            app:summary="@string/radio_stream_activate_wifi_desc"
+            app:title="@string/radio_stream_activate_wifi" />
+
+        <ListPreference
+            app:iconSpaceReserved="false"
+            app:defaultValue="1"
+            app:entries="@array/radioStreamWifiAfterAlarmEntries"
+            app:entryValues="@array/radioStreamWifiAfterAlarmValues"
+            app:key="radioStreamWifiAfterAlarm"
+            app:title="@string/radio_stream_wifi_after_alarm" />
 
         <SwitchPreferenceCompat
             app:iconSpaceReserved="false"

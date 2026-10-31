@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="radioStreamWifiAfterAlarmEntries">
+        <item>@string/radio_stream_wifi_after_alarm_always_off</item>
+        <item>@string/radio_stream_wifi_after_alarm_restore</item>
+        <item>@string/radio_stream_wifi_after_alarm_keep_on</item>
+    </string-array>
+
+    <string-array name="radioStreamWifiAfterAlarmValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    </string-array>
+</resources>

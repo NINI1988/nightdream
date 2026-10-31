@@ -347,6 +347,17 @@ OR
     <string name="radio_stream_require_wifi_desc">Falls aktiviert, wird der Radiowecker nur mit einer WLAN-Verbindung gestartet.</string>
     <string name="radio_stream_search">Suchen</string>
     <string name="radio_stream_unreachable_url">Der Sender ist nicht erreichbar.</string>
+    <string name="radio_stream_wifi_after_alarm">WLAN nach dem Radiowecker</string>
+    <string name="radio_stream_wifi_after_alarm_always_off">immer ausschalten</string>
+    <string name="radio_stream_wifi_after_alarm_keep_on">eingeschaltet lassen</string>
+    <string name="radio_stream_wifi_after_alarm_restore">vorherigen Zustand wiederherstellen</string>
+    <string name="display">Anzeige</string>
+    <string name="show_smart_home_menu">Smart-Home-Schaltfläche anzeigen</string>
+    <string name="show_weather_menu">Wetter-Schaltfläche anzeigen</string>
+    <string name="show_wifi_status">WLAN-Status anzeigen</string>
+    <string name="wifi_status_connected">WLAN</string>
+    <string name="wifi_status_connecting">WLAN…</string>
+    <string name="wifi_status_off">WLAN aus</string>
     <string name="rate">Bewertung abgeben</string>
     <string name="rate_summary">Über eine Bewertung der App würden wir uns freuen.</string>
     <string name="recommend">Weiterempfehlen</string>

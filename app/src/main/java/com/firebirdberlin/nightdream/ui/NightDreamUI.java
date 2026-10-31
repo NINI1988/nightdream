@@ -143,6 +143,9 @@ public class NightDreamUI {
     private final ImageView menuIcon;
     private final ImageView nightModeIcon;
     private final ImageView radioIcon;
+    private final View weatherMenuIcon;
+    private final View smartHomeMenuIcon;
+    private final WifiStatusView wifiStatusView;
     private final FrameLayout exifLayoutContainer;
     private final ClockLayoutContainer clockLayoutContainer;
     private final ClockLayout clockLayout;
@@ -470,6 +473,9 @@ public class NightDreamUI {
         notificationStatusBar = rootView.findViewById(R.id.notificationstatusbar);
         parentLayout = rootView.findViewById(R.id.background_group);
         radioIcon = rootView.findViewById(R.id.radio_icon);
+        weatherMenuIcon = rootView.findViewById(R.id.icon_weather_forecast);
+        smartHomeMenuIcon = rootView.findViewById(R.id.torch_icon);
+        wifiStatusView = rootView.findViewById(R.id.wifiStatusView);
         sidePanelLeft = rootView.findViewById(R.id.side_menu_left);
         sidePanelRight = rootView.findViewById(R.id.side_menu_right);
 
@@ -680,6 +686,9 @@ public class NightDreamUI {
         mainFrame.post(this::configureSafeRect);
 
         settings.reload();
+        weatherMenuIcon.setVisibility(settings.showWeatherMenu ? View.VISIBLE : View.GONE);
+        smartHomeMenuIcon.setVisibility(settings.showSmartHomeMenu ? View.VISIBLE : View.GONE);
+        wifiStatusView.setDisplayEnabled(settings.showWifiStatus);
         notificationStatusBar.removeAllViews();
         notificationStatusBar.setClickable(Settings.useNotificationStatusBar(mContext));
 
@@ -921,6 +930,7 @@ public class NightDreamUI {
 
         batteryIconView.setColor(textColor);
         batteryIconView.setVisibility(View.VISIBLE);
+        wifiStatusView.setStatusColor(textColor);
         menuIcon.setColorFilter(textColor, PorterDuff.Mode.SRC_ATOP);
 
         // colorize icons in the side panels

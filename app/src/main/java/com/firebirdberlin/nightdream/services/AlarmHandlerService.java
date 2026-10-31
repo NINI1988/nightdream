@@ -42,7 +42,7 @@ import java.util.Calendar;
 
 
 public class AlarmHandlerService extends BroadcastReceiver {
-    private static final String TAG = "AlarmHandlerService";
+    private static final String TAG = AlarmHandlerService.class.getSimpleName();
     private static final String ACTION_SKIP_ALARM = "com.firebirdberlin.nightdream.ACTION_SKIP_ALARM";
     private static final String ACTION_STOP_ALARM = "com.firebirdberlin.nightdream.ACTION_STOP_ALARM";
     private static final String ACTION_SNOOZE_ALARM = "com.firebirdberlin.nightdream.ACTION_SNOOZE_ALARM";
@@ -55,9 +55,6 @@ public class AlarmHandlerService extends BroadcastReceiver {
 
     public static void start(Context context) {
         Settings settings = new Settings(context);
-        boolean hasNetworkConnection = settings.radioStreamRequireWiFi ?
-                Utility.hasFastNetworkConnection(context) : Utility.hasNetworkConnection(context);
-
         SimpleTime alarmTime = getCurrentlyActiveAlarm();
         PurchaseManager purchaseManager = PurchaseManager.getInstance(context);
 
@@ -65,10 +62,22 @@ public class AlarmHandlerService extends BroadcastReceiver {
         if (purchaseManager.isPurchased(PurchaseManager.ITEM_WEB_RADIO) && alarmTime != null) {
             radioStationIndex = alarmTime.radioStationIndex;
         }
+        if (radioStationIndex > -1 && settings.radioStreamActivateWiFi) {
+            AlarmWifiService.prepareForAlarm(context);
+        }
+        boolean hasNetworkConnection = settings.radioStreamRequireWiFi ?
+                Utility.hasFastNetworkConnection(context) : Utility.hasNetworkConnection(context);
         Log.d(TAG, "settings.radioStreamRequireWiFi: " + settings.radioStreamRequireWiFi);
         Log.d(TAG, "hasNetworkConnection: " + hasNetworkConnection);
         Log.d(TAG, "radioStationIndex: " + radioStationIndex);
-        if (radioStationIndex > -1 && hasNetworkConnection) {
+        if (radioStationIndex > -1 && settings.radioStreamActivateWiFi
+                && !hasNetworkConnection) {
+            AlarmWifiService.runWhenNetworkAvailable(
+                    context,
+                    () -> RadioStreamService.start(context, alarmTime),
+                    () -> AlarmService.startAlarm(context, alarmTime)
+            );
+        } else if (radioStationIndex > -1 && hasNetworkConnection) {
             RadioStreamService.start(context, alarmTime);
         } else {
             if (RadioStreamService.streamingMode != RadioStreamService.StreamingMode.INACTIVE) {
@@ -154,6 +163,8 @@ public class AlarmHandlerService extends BroadcastReceiver {
                 RadioStreamService.stop(context);
             }
         }
+
+        AlarmWifiService.restoreAfterAlarm(context);
 
         AlarmHandlerService.cancel(context);
 

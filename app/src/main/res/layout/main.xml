@@ -115,6 +115,17 @@
                         android:textColor="#C2C2C2"
                         android:textSize="20sp" />
 
+                    <com.firebirdberlin.nightdream.ui.WifiStatusView
+                        android:id="@+id/wifiStatusView"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingLeft="12dp"
+                        android:paddingRight="5dp"
+                        android:singleLine="true"
+                        android:text="@string/wifi_status_connecting"
+                        android:textColor="#C2C2C2"
+                        android:textSize="20sp" />
+
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="0dp"

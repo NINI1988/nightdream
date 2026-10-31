@@ -1,0 +1,21 @@
+<PreferenceScreen
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    app:key="display">
+
+    <SwitchPreferenceCompat
+        app:defaultValue="true"
+        app:key="showWeatherMenu"
+        app:title="@string/show_weather_menu" />
+
+    <SwitchPreferenceCompat
+        app:defaultValue="true"
+        app:key="showSmartHomeMenu"
+        app:title="@string/show_smart_home_menu" />
+
+    <SwitchPreferenceCompat
+        app:defaultValue="true"
+        app:key="showWifiStatus"
+        app:title="@string/show_wifi_status" />
+
+</PreferenceScreen>

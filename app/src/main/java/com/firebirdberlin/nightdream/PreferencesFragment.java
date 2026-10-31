@@ -548,6 +548,9 @@ public class PreferencesFragment extends PreferenceFragmentCompat {
                         clockPreview.setImportAction(() -> importClockConfigLauncher.launch("application/json"));
                     }
                     break;
+                case "display":
+                    setPreferencesFromResource(R.xml.preferences_display, rootKey);
+                    break;
                 case "background":
                     setPreferencesFromResource(R.xml.preferences_background, rootKey);
                     break;

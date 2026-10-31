@@ -110,6 +110,9 @@ public class Settings {
     public ScreenProtectionModes screenProtection = ScreenProtectionModes.MOVE;
     public boolean showDate = true;
     private boolean showWeather = false;
+    public boolean showWeatherMenu = true;
+    public boolean showSmartHomeMenu = true;
+    public boolean showWifiStatus = true;
     public boolean showApparentTemperature = false;
     public boolean showTemperature = true;
     public boolean showWindSpeed = true;
@@ -124,6 +127,8 @@ public class Settings {
     public boolean isUIlocked = false;
     public boolean radioStreamMusicIsAllowedForAlarms = false;
     public boolean radioStreamRequireWiFi = false;
+    public boolean radioStreamActivateWiFi = false;
+    public int radioStreamWifiAfterAlarm = 1;
     public boolean keepRadioStreamRunning = true;
     private boolean scheduledAutoStartEnabled = false;
     public boolean scheduledAutoStartChargerRequired = true;
@@ -552,6 +557,9 @@ public class Settings {
         showBatteryWarning = settings.getBoolean("showBatteryWarning", false);
         showDate = settings.getBoolean("showDate", true);
         showWeather = settings.getBoolean("showWeather", false);
+        showWeatherMenu = settings.getBoolean("showWeatherMenu", true);
+        showSmartHomeMenu = settings.getBoolean("showSmartHomeMenu", true);
+        showWifiStatus = settings.getBoolean("showWifiStatus", true);
         showApparentTemperature = settings.getBoolean("showApparentTemperature", false);
         showPollen = settings.getBoolean("showPollen", false);
         showTemperature = settings.getBoolean("showTemperature", true);
@@ -575,6 +583,10 @@ public class Settings {
         showAlarmsPersistently = settings.getBoolean("showAlarmsPersistently", false);
         radioStreamMusicIsAllowedForAlarms = settings.getBoolean("radioStreamMusicIsAllowedForAlarms", false);
         radioStreamRequireWiFi = settings.getBoolean("radioStreamRequireWiFi", false);
+        radioStreamActivateWiFi = settings.getBoolean("radioStreamActivateWiFi", false);
+        radioStreamWifiAfterAlarm = Integer.parseInt(
+                settings.getString("radioStreamWifiAfterAlarm", "1")
+        );
         keepRadioStreamRunning = settings.getBoolean("keepRadioStreamRunning", true);
         isUIlocked = settings.getBoolean("isUIlocked", false);
         dateFormat = settings.getString("dateFormat", getDefaultDateFormat());

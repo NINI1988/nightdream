@@ -54,7 +54,7 @@ public class BrightSkyApi {
         mContext = new WeakReference<>(context);
         String responseText = fetchWeatherData(context, city);
         if (responseText == null || responseText.isEmpty()) {
-            return new WeatherEntry();
+            return null;
         }
         Data data = new Gson().fromJson(responseText, Data.class);
         long now = System.currentTimeMillis();
@@ -63,11 +63,7 @@ public class BrightSkyApi {
             Source source = data.getSourceById(weather.source_id);
             return weather.toWeatherEntry(source, city, requestTimestamp);
         } else {
-            WeatherEntry entry = new WeatherEntry();
-            entry.lat = (float) city.lat;
-            entry.lon = (float) city.lon;
-            entry.cityName = city.name;
-            return entry;
+            return null;
         }
     }
 
@@ -110,7 +106,7 @@ public class BrightSkyApi {
             requestTimestamp = httpReader.getRequestTimestamp();
             return responseText;
         } catch (MalformedURLException e) {
-            e.printStackTrace();
+            Log.e(TAG, "Malformed URL for forecast request", e);
             return null;
         }
     }
@@ -260,8 +256,6 @@ public class BrightSkyApi {
             entry.rain1h = precipitation;
             entry.rain3h = -1f;
             entry.request_timestamp = requestTimestamp;
-            entry.sunriseTime = 0L;
-            entry.sunsetTime = 0L;
             entry.temperature = toKelvin(temperature);
             entry.apparentTemperature = -273.15;
             entry.humidity = relative_humidity;

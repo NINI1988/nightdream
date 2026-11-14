@@ -14,7 +14,6 @@ gen/
 
 # Gradle files
 .gradle/
-.gradle-user/
 build/
 /*/build/
 
@@ -47,8 +46,4 @@ output-metadata.json
 .classpath
 .project
 .settings/
-
-.metals/
-.vscode/
-.android-user/
-gradle/gradle-daemon-jvm.properties
+.artifacts

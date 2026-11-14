@@ -37,19 +37,28 @@ import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import android.graphics.drawable.GradientDrawable;
+import android.widget.FrameLayout;
+
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatDelegate;
+import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
-import androidx.viewpager.widget.ViewPager;
+import androidx.viewpager2.widget.ViewPager2;
+import com.google.android.material.tabs.TabLayoutMediator;
 
 import com.firebirdberlin.dwd.PollenExposureRequestTask;
+import com.firebirdberlin.nightdream.airquality.AirQualityData;
+import com.firebirdberlin.nightdream.airquality.AirQualityRequestTask;
 import com.firebirdberlin.nightdream.models.FontCache;
 import com.firebirdberlin.nightdream.services.ScreenWatcherService;
 import com.firebirdberlin.nightdream.ui.DirectionIconView;
-import com.firebirdberlin.nightdream.ui.WeatherForecastLayout;
 import com.firebirdberlin.openweathermapapi.ForecastRequestTask;
 import com.firebirdberlin.openweathermapapi.ForecastRequestTaskToday;
+import com.firebirdberlin.openweathermapapi.GeocoderApi;
 import com.firebirdberlin.openweathermapapi.WeatherLocationDialogFragment;
 import com.firebirdberlin.openweathermapapi.models.City;
 import com.firebirdberlin.openweathermapapi.models.WeatherEntry;
@@ -57,6 +66,8 @@ import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.tabs.TabLayout;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
@@ -66,8 +77,9 @@ public class WeatherForecastActivity
         implements ForecastRequestTask.AsyncResponse,
         ForecastRequestTaskToday.AsyncResponse,
         PollenExposureRequestTask.AsyncResponse,
+        AirQualityRequestTask.AsyncResponse,
         WeatherLocationDialogFragment.WeatherLocationDialogListener {
-    final static String TAG = "WeatherForecastActivity";
+    private static final String TAG = WeatherForecastActivity.class.getSimpleName();
     final int PERMISSIONS_REQUEST_ACCESS_LOCATION = 4000;
     final int MENU_ITEM_SEARCH = 3000;
     final int MENU_ITEM_ENABLE_GPS = 3001;
@@ -92,25 +104,53 @@ public class WeatherForecastActivity
     private Snackbar snackbar;
     private WeatherForecastTabAdapter adapter;
     private TabLayout tabLayout;
-    private ViewPager viewPager;
+    private ViewPager2 viewPager;
     private WeatherEntry todayWeatherEntry = null;
     private List<WeatherEntry> forecastWeatherEntries = null;
+    private PollenExposure pollenExposureResult = null;
+
+    public PollenExposure getPollenExposureResult() {
+        return pollenExposureResult;
+    }
+
+    public City getSelectedCity() {
+        return selectedCity;
+    }
 
     private LocationManager locationManager = null;
+    private static final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final LocationListener locationListener = new LocationListener() {
         @Override
-        public void onLocationChanged(final Location location) {
+        public void onLocationChanged(@NonNull final Location location) {
             Log.d(TAG, "onLocationChanged");
-            City city = new City();
-            city.lat = location.getLatitude();
-            city.lon = location.getLongitude();
-            city.name = "current";
-            selectedCity = city;
-            Log.i(TAG, "location updated " + city.toJson());
             if (locationManager != null && locationListener != null) {
                 locationManager.removeUpdates(locationListener);
             }
-            requestWeather(city);
+            executorService.execute(() -> {
+                City city = GeocoderApi.findCityByCoordinates(
+                        getApplicationContext(),
+                        location.getLatitude(),
+                        location.getLongitude()
+                );
+                final City resolvedCity;
+                if (city == null) {
+                    resolvedCity = new City();
+                    resolvedCity.lat = location.getLatitude();
+                    resolvedCity.lon = location.getLongitude();
+                    resolvedCity.name = "current";
+                } else {
+                    if (Utility.isEmpty(city.name)) {
+                        city.name = "current";
+                    }
+                    resolvedCity = city;
+                }
+
+                runOnUiThread(() -> {
+                    selectedCity = resolvedCity;
+                    Log.i(TAG, "location updated " + resolvedCity.toJson());
+                    requestWeather(resolvedCity);
+                });
+            });
         }
 
         @Override
@@ -153,15 +193,15 @@ public class WeatherForecastActivity
         selectedCity = settings.getCityForWeather();
         autoLocationEnabled = settings.getWeatherAutoLocationEnabled();
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        adapter = new WeatherForecastTabAdapter(getSupportFragmentManager());
+        adapter = new WeatherForecastTabAdapter(this);
         adapter.addFragment(new WeatherForecastTabWeather(), getResources().getString(R.string.forecast));
-
-        if (settings.showPollen) {
-            adapter.addFragment(new WeatherForecastTabPollen(), getResources().getString(R.string.showPollen));
-        }
+        adapter.addFragment(new WeatherForecastTabPollen(), getResources().getString(R.string.showPollen));
 
         viewPager.setAdapter(adapter);
-        tabLayout.setupWithViewPager(viewPager);
+        new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
+            tab.setText(adapter.getTitle(position));
+        }).attach();
+        updateTabVisibility(selectedCity, null);
     }
 
     @Override
@@ -175,23 +215,32 @@ public class WeatherForecastActivity
         if (forecastWeatherEntries != null) {
             onRequestFinished(forecastWeatherEntries);
         }
+        if (pollenExposureResult != null) {
+            onRequestFinished(pollenExposureResult);
+        }
     }
 
+    @SuppressWarnings("ConstantConditions")
     void init() {
         Log.d(TAG, "init()");
 
         if (!isPurchased(PurchaseManager.ITEM_WEATHER_DATA)) {
-            adapter = new WeatherForecastTabAdapter(getSupportFragmentManager());
+            adapter = new WeatherForecastTabAdapter(this);
             adapter.addFragment(
                     new WeatherForecastTabPreview(),
                     getResources().getString(R.string.forecast));
 
             runOnUiThread(() -> {
                 viewPager.setAdapter(adapter);
-                tabLayout.setupWithViewPager(viewPager);
+                new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
+                    tab.setText(adapter.getTitle(position));
+                }).attach();
+                if (tabLayout != null) {
+                    tabLayout.setVisibility(View.GONE);
+                }
             });
 
-            ((WeatherForecastTabPreview) adapter.getItem(0)).setupForecastPreview(settings);
+            ((WeatherForecastTabPreview) adapter.getFragment(0)).setupForecastPreview(settings);
             actionBarSetup("Ecotopia");
 
             WeatherEntry fakeToday = new WeatherEntry();
@@ -210,7 +259,10 @@ public class WeatherForecastActivity
         } else {
             runOnUiThread(() -> {
                 viewPager.setAdapter(adapter);
-                tabLayout.setupWithViewPager(viewPager);
+                new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
+                    tab.setText(adapter.getTitle(position));
+                }).attach();
+                updateTabVisibility(selectedCity, null);
             });
 
             if ((autoLocationEnabled && !locationAccessGranted) || (!autoLocationEnabled && selectedCity == null)) {
@@ -234,7 +286,7 @@ public class WeatherForecastActivity
         LinearLayout todayView = findViewById(R.id.todayView);
         if (todayView == null) return;
         todayView.removeAllViews();
-        if (entry == null) {
+        if (entry == null || !entry.isValid()) {
             return;
         }
         Log.d(TAG, "onRequestFinished() WeatherEntry: " + entry);
@@ -248,6 +300,9 @@ public class WeatherForecastActivity
         TextView summaryHumidity = summaryView.findViewById(R.id.summaryHumidity);
         TextView summarySunrise = summaryView.findViewById(R.id.summarySunrise);
         TextView summarySunset = summaryView.findViewById(R.id.summarySunset);
+        TextView summaryMoonrise = summaryView.findViewById(R.id.summaryMoonrise);
+        TextView summaryMoonset = summaryView.findViewById(R.id.summaryMoonset);
+        TextView summaryMoonPhase = summaryView.findViewById(R.id.summaryMoonPhase);
         DirectionIconView summaryWindDirection = summaryView.findViewById(R.id.summaryWindDirection);
         TextView summaryWind = summaryView.findViewById(R.id.summaryWind);
         TextView summaryRainIcon = summaryView.findViewById(R.id.summaryRainIcon);
@@ -318,6 +373,48 @@ public class WeatherForecastActivity
             summarySunset.setText(Utility.formatTime(timeFormat, mCalendar));
         }
 
+        boolean moonUp = entry.isMoonUp();
+
+        if (summaryMoonrise != null) {
+            // up:   last rise (past)
+            // down: next rise (future)
+            long moonrise = entry.getMoonriseTime();
+            if (moonrise != 0L) {
+                mCalendar.setTimeInMillis(moonrise);
+                summaryMoonrise.setText(Utility.formatTime(timeFormat, mCalendar));
+            } else {
+                summaryMoonrise.setText("-");
+            }
+        }
+        if (summaryMoonset != null) {
+            // up:   next set
+            // down: first set after the next rise (always after the rise shown above)
+            long moonset = entry.getMoonsetTime();
+            if (moonset != 0L) {
+                mCalendar.setTimeInMillis(moonset);
+//                String text = Utility.formatTime(timeFormat, mCalendar);
+
+//                java.util.Calendar ref = java.util.Calendar.getInstance();
+//                ref.setTimeInMillis(entry.timestamp * 1000L);
+//                if (mCalendar.get(java.util.Calendar.DAY_OF_YEAR) != ref.get(java.util.Calendar.DAY_OF_YEAR)
+//                        || mCalendar.get(java.util.Calendar.YEAR) != ref.get(java.util.Calendar.YEAR)) {
+//                    text += " +1";
+//                }
+//                summaryMoonset.setText(text);
+                mCalendar.setTimeInMillis(moonset);
+                summaryMoonset.setText(Utility.formatTime(timeFormat, mCalendar));
+            } else {
+                summaryMoonset.setText("-");
+            }
+        }
+
+        if (summaryMoonPhase != null) {
+            org.shredzone.commons.suncalc.MoonIllumination illumination = entry.getMoonIllumination();
+            double fraction = illumination.getFraction();
+            String moonEmoji = getMoonEmoji(illumination.getPhase());
+            summaryMoonPhase.setText(String.format(Locale.getDefault(), "%s %d%%", moonEmoji, Math.round(fraction * 100)));
+        }
+
         if (summaryWindDirection != null) {
             summaryWindDirection.setColor(Color.WHITE);
             summaryWindDirection.setMode(settings.windDirectionIconMode);
@@ -329,6 +426,8 @@ public class WeatherForecastActivity
         }
 
         todayView.addView(summaryView);
+
+        new AirQualityRequestTask(this, this).execute(entry.lat, entry.lon);
 
         settings.setWeatherEntry(entry);
         ScreenWatcherService.updateNotification(
@@ -342,21 +441,16 @@ public class WeatherForecastActivity
                 WindSpeedConversion.metersPerSecondToBeaufort(entry.windSpeed)
         );
         String formatted = entry.formatWindText(speedUnit);
-        switch (speedUnit) {
-            case WeatherEntry.MILES_PER_HOUR:
-            case WeatherEntry.KM_PER_HOUR:
-            case WeatherEntry.KNOT:
-                return String.format("%s (%s)", formatted, windSpeedBeaufort);
-            case WeatherEntry.BEAUFORT:
-            case WeatherEntry.METERS_PER_SECOND:
-            default:
-                return String.format(
-                        Locale.getDefault(),
-                        "%.1f m/s (%s)",
-                        entry.windSpeed,
-                        windSpeedBeaufort
-                );
-        }
+        return switch (speedUnit) {
+            case WeatherEntry.MILES_PER_HOUR, WeatherEntry.KM_PER_HOUR, WeatherEntry.KNOT ->
+                    String.format("%s (%s)", formatted, windSpeedBeaufort);
+            default -> String.format(
+                    Locale.getDefault(),
+                    "%.1f m/s (%s)",
+                    entry.windSpeed,
+                    windSpeedBeaufort
+            );
+        };
     }
 
     public void onRequestFinished(List<WeatherEntry> entries) {
@@ -365,13 +459,18 @@ public class WeatherForecastActivity
         if (!entries.isEmpty()) {
             WeatherEntry firstEntry = entries.get(0);
             String cityName = firstEntry.cityName;
-            if (Utility.isEmpty(cityName) && !autoLocationEnabled) {
-                cityName = selectedCity.name;
+            if (Utility.isEmpty(cityName) || "current".equals(cityName)) {
+                if (!autoLocationEnabled && selectedCity != null) {
+                    cityName = selectedCity.name;
+                }
+            }
+            if (Utility.isEmpty(cityName) || "current".equals(cityName)) {
+                cityName = getString(R.string.weather_current_location);
             }
             actionBarSetup(cityName);
         }
         try {
-            ((WeatherForecastTabWeather) adapter.getItem(0)).onRequestFinished(entries, settings);
+            ((WeatherForecastTabWeather) adapter.getFragment(0)).onRequestFinished(entries, settings);
         } catch (ClassCastException e) {
             Log.e(TAG, "ClaascastException e");
         }
@@ -379,7 +478,7 @@ public class WeatherForecastActivity
     }
 
     @Override
-    public void onRequestError(Exception exception) {
+    public void onRequestError(@NonNull Exception exception) {
         Log.e(TAG, "onRequestError", exception);
     }
 
@@ -393,7 +492,96 @@ public class WeatherForecastActivity
 
     public void onRequestFinished(PollenExposure result) {
         Log.d(TAG, "onRequestFinished(PollenExposure)");
-        ((WeatherForecastTabPollen) adapter.getItem(1)).onRequestFinished(selectedCity, result);
+        pollenExposureResult = result;
+        Fragment fragment = adapter.getFragment(1);
+        if (fragment instanceof WeatherForecastTabPollen) {
+            ((WeatherForecastTabPollen) fragment).onRequestFinished(selectedCity, result);
+        }
+        updateTabVisibility(selectedCity, result);
+    }
+
+    @SuppressWarnings("unused")
+    private void updateTabVisibility(@Nullable City city, @Nullable PollenExposure result) {
+        if (tabLayout == null) return;
+        boolean isGermany = City.isGermany(city);
+
+        if (!isGermany) {
+            tabLayout.setVisibility(View.GONE);
+            return;
+        }
+
+        if (adapter != null && adapter.getItemCount() > 1) {
+            tabLayout.setVisibility(View.VISIBLE);
+        } else {
+            tabLayout.setVisibility(View.GONE);
+        }
+    }
+
+    @Override
+    public void onRequestFinished(@Nullable AirQualityData result) {
+        Log.d(TAG, "onRequestFinished(AirQualityData): " + result);
+        View todayView = findViewById(R.id.todayView);
+        if (todayView == null) return;
+        FrameLayout container = todayView.findViewById(R.id.airQualityContainer);
+        if (container == null) return;
+        container.removeAllViews();
+
+        if (result == null || !result.hasAnyData()) {
+            container.setVisibility(View.GONE);
+            return;
+        }
+
+        View aqView = LayoutInflater.from(this)
+                .inflate(R.layout.layout_air_quality_summary, container, false);
+
+        TextView stationText = aqView.findViewById(R.id.airQualityStationText);
+        TextView lqiBadge = aqView.findViewById(R.id.airQualityLqiBadge);
+        TextView pm25 = aqView.findViewById(R.id.airQualityPm25);
+        TextView pm10 = aqView.findViewById(R.id.airQualityPm10);
+        TextView no2 = aqView.findViewById(R.id.airQualityNo2);
+        TextView o3 = aqView.findViewById(R.id.airQualityO3);
+        View infoButton = aqView.findViewById(R.id.airQualityInfoButton);
+
+        if (stationText != null) {
+            String stationStr = result.stationName + " ("
+                    + String.format(Locale.getDefault(), "%.1f km", result.distanceKm) + ")";
+            if (!Utility.isEmpty(result.timeEndCet)) {
+                String timeStr = result.timeEndCet;
+                if (timeStr.length() >= 16) {
+                    timeStr = timeStr.substring(11, 16);
+                }
+                stationStr += " • " + timeStr + " Uhr";
+            }
+            stationText.setText(stationStr);
+        }
+
+        if (lqiBadge != null) {
+            LqiStyle style = getLqiStyle(result.lqiIndex);
+            lqiBadge.setText(style.textResId);
+            GradientDrawable bg = (GradientDrawable) lqiBadge.getBackground().mutate();
+            bg.setColor(style.color);
+        }
+
+        if (pm25 != null) pm25.setText(AirQualityData.formatValue(result.pm25));
+        if (pm10 != null) pm10.setText(AirQualityData.formatValue(result.pm10));
+        if (no2 != null) no2.setText(AirQualityData.formatValue(result.no2));
+        if (o3 != null) o3.setText(AirQualityData.formatValue(result.o3));
+
+        if (infoButton != null) {
+            infoButton.setOnClickListener(v -> showAirQualityInfoDialog());
+        }
+
+        container.addView(aqView);
+        container.setVisibility(View.VISIBLE);
+    }
+
+    private void showAirQualityInfoDialog() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.air_quality_info_title)
+                .setMessage(getString(R.string.air_quality_info_dialog_text)
+                        + "\n\n" + getString(R.string.air_quality_attribution))
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
     }
 
     void addToFavoriteCities(City city) {
@@ -550,15 +738,35 @@ public class WeatherForecastActivity
             @SuppressLint("MissingPermission")
             Location location = locationManager.getLastKnownLocation(provider);
             if (location == null) continue;
-            City city = new City();
-            city.lat = location.getLatitude();
-            city.lon = location.getLongitude();
-            city.name = "current";
-            selectedCity = city;
             if (locationManager != null && locationListener != null) {
                 locationManager.removeUpdates(locationListener);
             }
-            requestWeather(city);
+            executorService.execute(() -> {
+                City city = GeocoderApi.findCityByCoordinates(
+                        getApplicationContext(),
+                        location.getLatitude(),
+                        location.getLongitude()
+                );
+                final City resolvedCity;
+                if (city == null) {
+                    resolvedCity = new City();
+                    resolvedCity.lat = location.getLatitude();
+                    resolvedCity.lon = location.getLongitude();
+                    resolvedCity.name = "current";
+                } else {
+                    if (Utility.isEmpty(city.name)) {
+                        city.name = "current";
+                    }
+                    resolvedCity = city;
+                }
+
+                runOnUiThread(() -> {
+                    selectedCity = resolvedCity;
+                    Log.i(TAG, "last known location updated " + resolvedCity.toJson());
+                    requestWeather(resolvedCity);
+                });
+            });
+            break;
         }
     }
 
@@ -567,13 +775,12 @@ public class WeatherForecastActivity
             return;
         }
         if (city != null) {
+            pollenExposureResult = null;
             new ForecastRequestTask(this, settings.getWeatherProvider(), this).execute(city.toJson());
             new ForecastRequestTaskToday(this, settings.getWeatherProvider(), this).execute(city.toJson());
-            if (settings.showPollen) {
-                Log.i(TAG, "requesting pollen data for " + city.toJson());
-                WeatherEntry weatherEntry = settings.getWeatherEntry();
-                new PollenExposureRequestTask(this, this).execute(weatherEntry);
-            }
+            Log.i(TAG, "requesting pollen data for " + city.toJson());
+            new PollenExposureRequestTask(this, this).execute(city.lat, city.lon);
+            updateTabVisibility(city, null);
         }
     }
 
@@ -581,35 +788,33 @@ public class WeatherForecastActivity
     public void onRequestPermissionsResult(
             int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults
     ) {
-        switch (requestCode) {
-            case PERMISSIONS_REQUEST_ACCESS_LOCATION:
-                // If request is cancelled, the result arrays are empty.
-                if (grantResults.length > 0 &&
-                        grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    // Permission is granted. Continue the action or workflow
-                    // in your app.
-                    Log.i(TAG, "Permission granted");
-                    locationAccessGranted = true;
-                    autoLocationEnabled = true;
-                    getWeatherForCurrentLocation();
-                    // initTabView(new City());
-                } else {
-                    // Explain to the user that the feature is unavailable because
-                    // the features requires a permission that the user has denied.
-                    // At the same time, respect the user's decision. Don't link to
-                    // system settings in an effort to convince the user to change
-                    // their decision.
-                    locationAccessGranted = false;
-                    if (cities != null && !cities.isEmpty()) {
-                        City firstCity = cities.get(0);
-                        if (firstCity != null) {
-                            Log.i(TAG, "Permission denied, activating first favorite location: " + firstCity.name);
-                            onWeatherLocationSelected(firstCity);
-                        }
+        if (requestCode == PERMISSIONS_REQUEST_ACCESS_LOCATION) {// If request is cancelled, the result arrays are empty.
+            if (grantResults.length > 0 &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission is granted. Continue the action or workflow
+                // in your app.
+                Log.i(TAG, "Permission granted");
+                locationAccessGranted = true;
+                autoLocationEnabled = true;
+                getWeatherForCurrentLocation();
+                // initTabView(new City());
+            } else {
+                // Explain to the user that the feature is unavailable because
+                // the features requires a permission that the user has denied.
+                // At the same time, respect the user's decision. Don't link to
+                // system settings in an effort to convince the user to change
+                // their decision.
+                locationAccessGranted = false;
+                if (cities != null && !cities.isEmpty()) {
+                    City firstCity = cities.get(0);
+                    if (firstCity != null) {
+                        Log.i(TAG, "Permission denied, activating first favorite location: " + firstCity.name);
+                        onWeatherLocationSelected(firstCity);
                     }
                 }
-                invalidateOptionsMenu();
-                return;
+            }
+            invalidateOptionsMenu();
+            return;
         }
         // Other 'case' lines to check for other
         // permissions this app might request.
@@ -645,19 +850,22 @@ public class WeatherForecastActivity
     }
 
     private boolean isLocationProviderEnabled() {
-        int locationMode = 0;
-
-        try {
-            locationMode = android.provider.Settings.Secure.getInt(
-                    getContentResolver(), android.provider.Settings.Secure.LOCATION_MODE
-            );
-
-        } catch (android.provider.Settings.SettingNotFoundException e) {
-            Log.e(TAG, "Error getting location mode");
+        if (locationManager == null) {
+            return false;
         }
-
-        return locationMode != android.provider.Settings.Secure.LOCATION_MODE_OFF;
-
+        boolean gpsEnabled = false;
+        boolean networkEnabled = false;
+        try {
+            gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking GPS provider", e);
+        }
+        try {
+            networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        } catch (Exception e) {
+            Log.e(TAG, "Error checking network provider", e);
+        }
+        return gpsEnabled || networkEnabled;
     }
 
     private void conditionallyShowSnackBar() {
@@ -675,9 +883,50 @@ public class WeatherForecastActivity
 
             snackbar.setAction(R.string.action_change, new LocationProviderSettingListener());
             snackbar.show();
-        } else {
-            dismissSnackBar();
         }
+    }
+
+    private String getMoonEmoji(double phaseDegrees) {
+        // map -180..180 (new moon at ±180, full moon at 0) to 0..1 (new moon at 0, full at 0.5)
+        double cycle = ((phaseDegrees + 180.0) % 360.0 + 360.0) % 360.0 / 360.0;
+
+        if (cycle < 0.03 || cycle > 0.97) {
+            return "🌑";
+        } else if (cycle < 0.22) {
+            return "🌒"; // waxing crescent
+        } else if (cycle < 0.28) {
+            return "🌓"; // first quarter
+        } else if (cycle < 0.47) {
+            return "🌔"; // waxing gibbous
+        } else if (cycle < 0.53) {
+            return "🌕";
+        } else if (cycle < 0.72) {
+            return "🌖"; // waning gibbous
+        } else if (cycle < 0.78) {
+            return "🌗"; // last quarter
+        } else {
+            return "🌘"; // waning crescent
+        }
+    }
+
+    // LQI: Luftqualitätsindex (Air Quality Index)
+    private record LqiStyle(int color, int textResId) {}
+
+    private LqiStyle getLqiStyle(int lqiIndex) {
+        return switch (lqiIndex) {
+            case AirQualityData.LQI_VERY_GOOD ->
+                    new LqiStyle(Color.parseColor("#00B0F0"), R.string.air_quality_lqi_1);
+            case AirQualityData.LQI_GOOD ->
+                    new LqiStyle(Color.parseColor("#4DAF4A"), R.string.air_quality_lqi_2);
+            case AirQualityData.LQI_MODERATE ->
+                    new LqiStyle(Color.parseColor("#F1C40F"), R.string.air_quality_lqi_3);
+            case AirQualityData.LQI_POOR ->
+                    new LqiStyle(Color.parseColor("#E67E22"), R.string.air_quality_lqi_4);
+            case AirQualityData.LQI_VERY_POOR ->
+                    new LqiStyle(Color.parseColor("#E74C3C"), R.string.air_quality_lqi_5);
+            default ->
+                    new LqiStyle(Color.GRAY, R.string.air_quality_lqi_unknown);
+        };
     }
 
     void dismissSnackBar() {

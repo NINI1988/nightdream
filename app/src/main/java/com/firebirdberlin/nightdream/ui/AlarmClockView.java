@@ -537,6 +537,7 @@ public class AlarmClockView extends View {
 
     private boolean showRightCorner() {
         if (locked) return false;
+        if (!useSingleTap && !useLongPress) return false;
         if (alarmIsRunning()) return !useAlarmStopSlider;
         return (isAlarmSet() && !time.isRecurring()) || userChangesAlarmTime;
 
@@ -639,6 +640,7 @@ public class AlarmClockView extends View {
         });
     }
 
+    @SuppressWarnings("deprecation")
     void toast(final CharSequence text) {
         mHandler.post(new Runnable() {
             @Override

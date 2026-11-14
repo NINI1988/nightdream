@@ -28,7 +28,7 @@ import java.util.Locale;
 public class UtilityTest {
     @Test
     public void testGetWeekdayStringsForLocaleDe() {
-        String[] weekdays = Utility.getWeekdayStringsForLocale(new Locale("de"));
+        String[] weekdays = Utility.getWeekdayStringsForLocale(Locale.forLanguageTag("de"));
 
         for (int i = 0; i < weekdays.length; i++) {
             System.out.println(weekdays[i]);
@@ -41,7 +41,7 @@ public class UtilityTest {
 
     @Test
     public void testGetWeekdayStringsForLocaleUs() {
-        String[] weekdays = Utility.getWeekdayStringsForLocale(new Locale("us"));
+        String[] weekdays = Utility.getWeekdayStringsForLocale(Locale.forLanguageTag("us"));
         String[] expected = {"", "S", "M", "T", "W", "T", "F", "S"};
 
         Assert.assertEquals(8, weekdays.length);
@@ -128,5 +128,40 @@ public class UtilityTest {
         Assert.assertEquals(2, Utility.getNearestEvenIntValue(2.0f));
         Assert.assertEquals(4, Utility.getNearestEvenIntValue(3.5f));
         Assert.assertEquals(0, Utility.getNearestEvenIntValue(0.5f));
+    }
+
+    @Test
+    public void testCalculateDistanceKm() {
+        double distance = Utility.calculateDistanceKm(52.5200, 13.4050, 52.4014, 13.0602);
+        Assert.assertEquals(27.0, distance, 3.0);
+
+        double samePoint = Utility.calculateDistanceKm(52.5200, 13.4050, 52.5200, 13.4050);
+        Assert.assertEquals(0.0, samePoint, 0.001);
+    }
+
+    @Test
+    public void testCalculateNightIntervals() {
+        long startTime = 1698364800L * 1000L; // 2023-10-27 00:00:00 UTC
+        long endTime = 1698451200L * 1000L;   // 2023-10-28 00:00:00 UTC
+        float lat = 52.5200f; // Berlin
+        float lon = 13.4050f;
+
+        java.util.List<Utility.NightInterval> intervals = Utility.calculateNightIntervals(
+                startTime, endTime, lat, lon);
+        Assert.assertNotNull(intervals);
+        Assert.assertFalse(intervals.isEmpty());
+        for (Utility.NightInterval interval : intervals) {
+            Assert.assertTrue(interval.end > interval.start);
+        }
+    }
+
+    @Test
+    public void testIsGermany() {
+        Assert.assertFalse(Utility.isGermany(null));
+        Assert.assertTrue(Utility.isGermany(Locale.GERMANY));
+        Assert.assertTrue(Utility.isGermany(Locale.forLanguageTag("de-DE")));
+        Assert.assertTrue(Utility.isGermany(Locale.forLanguageTag("en-DE")));
+        Assert.assertFalse(Utility.isGermany(Locale.US));
+        Assert.assertFalse(Utility.isGermany(Locale.GERMAN));
     }
 }

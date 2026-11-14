@@ -18,15 +18,12 @@
 
 package com.firebirdberlin.nightdream.ui;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.res.TypedArray;
 import android.database.ContentObserver;
 import android.graphics.Color;
 import android.graphics.LightingColorFilter;
 import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.media.AudioManager;
@@ -34,7 +31,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.AttributeSet;
 import android.util.Log;
-import android.view.ContextThemeWrapper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
@@ -46,11 +42,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.ContextCompat;
-import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.fragment.app.FragmentManager;
 
-import com.firebirdberlin.nightdream.Config;
 import com.firebirdberlin.nightdream.R;
 import com.firebirdberlin.nightdream.Settings;
 import com.firebirdberlin.nightdream.Utility;
@@ -60,7 +53,6 @@ import com.firebirdberlin.nightdream.events.OnRadioStreamReadyForPlayback;
 import com.firebirdberlin.nightdream.events.OnRadioStreamStarted;
 import com.firebirdberlin.nightdream.events.OnRadioStreamStopped;
 import com.firebirdberlin.nightdream.services.RadioStreamService;
-import com.firebirdberlin.nightdream.services.AlarmWifiService;
 import com.firebirdberlin.radiostreamapi.models.FavoriteRadioStations;
 import com.firebirdberlin.radiostreamapi.models.RadioStation;
 
@@ -76,7 +68,6 @@ public class WebRadioLayout extends RelativeLayout {
     private ImageView volumeMutedIndicator;
     private boolean showConnectingHint = false;
     private ProgressBar spinner;
-    private final Runnable hideConnectingHint = () -> setShowConnectingHint(false);
     private Settings settings;
     private String metaTitle = null;
     private final java.util.function.Consumer<Object> eventListener = event -> {
@@ -92,7 +83,6 @@ public class WebRadioLayout extends RelativeLayout {
             showMetaTitle(metaTitle);
         } else if (event instanceof OnRadioStreamStopped) {
             Log.d(TAG, "AppEventBus - OnRadioStreamStopped");
-            AlarmWifiService.restoreAfterManualRadio(getContext());
             metaTitle = null;
             updateText();
             setShowConnectingHint(false);
@@ -102,12 +92,11 @@ public class WebRadioLayout extends RelativeLayout {
     };
     private AudioVolumeContentObserver audioVolumeContentObserver = null;
     private UserInteractionObserver userInteractionObserver;
-    private int currentVolumme = -1;
+    private int currentVolume = -1;
     private int accentColor = -1;
     private int textColor = -1;
     private int maxNumButtons = 0;
     private Integer activeStationIndex;
-    private int networkStartRequestId;
     private final OnClickListener buttonOnClickListener = new OnClickListener() {
         @Override
         public void onClick(final View v) {
@@ -129,21 +118,21 @@ public class WebRadioLayout extends RelativeLayout {
         showRadioStreamDialog(stationIndex);
         return true;
     };
-    private final Runnable resetDefaultText = () -> updateText();
+    private final Runnable resetDefaultText = this::updateText;
 
     public WebRadioLayout(Context context) {
         super(context);
         this.context = context;
-        init(null);
+        init();
     }
 
     public WebRadioLayout(final Context context, AttributeSet attrs) {
         super(context, attrs);
         this.context = context;
-        init(attrs);
+        init();
     }
 
-    private void init(AttributeSet attrs) {
+    private void init() {
         settings = new Settings(context);
         stations = settings.getFavoriteRadioStations();
 
@@ -179,10 +168,10 @@ public class WebRadioLayout extends RelativeLayout {
             int newVolume = 0;
             if (isStreamMuted()) {
                 int maxVol = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-                newVolume = (currentVolumme > -1) ? currentVolumme : Math.round((float) maxVol * 0.1f);
-                currentVolumme = -1;
+                newVolume = (currentVolume > -1) ? currentVolume : Math.round((float) maxVol * 0.1f);
+                currentVolume = -1;
             } else {
-                currentVolumme = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
+                currentVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
             }
             audio.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, AudioManager.FLAG_SHOW_UI);
             updateVolumeMutedIndicator();
@@ -197,7 +186,15 @@ public class WebRadioLayout extends RelativeLayout {
         maxNumButtons = FavoriteRadioStations.getMaxNumEntries();
 
         for (int i = 0; i < maxNumButtons; i++) {
-            int id = getResources().getIdentifier("web_radio_button" + (i + 1), "id", context.getPackageName());
+            int id = switch (i) {
+                case 0 -> R.id.web_radio_button1;
+                case 1 -> R.id.web_radio_button2;
+                case 2 -> R.id.web_radio_button3;
+                case 3 -> R.id.web_radio_button4;
+                case 4 -> R.id.web_radio_button5;
+                case 5 -> R.id.web_radio_button6;
+                default -> 0;
+            };
             Button btn = findViewById(id); // get the element
             btn.setVisibility(View.GONE);
             btn.setOnLongClickListener(buttonOnLongClickListener);
@@ -319,7 +316,15 @@ public class WebRadioLayout extends RelativeLayout {
         final int lastButtonInUseIndex = lastButtonInUseIndex();
 
         for (int i = 0; i < maxNumButtons; i++) {
-            int id = getResources().getIdentifier("web_radio_button" + (i + 1), "id", context.getPackageName());
+            int id = switch (i) {
+                case 0 -> R.id.web_radio_button1;
+                case 1 -> R.id.web_radio_button2;
+                case 2 -> R.id.web_radio_button3;
+                case 3 -> R.id.web_radio_button4;
+                case 4 -> R.id.web_radio_button5;
+                case 5 -> R.id.web_radio_button6;
+                default -> 0;
+            };
             Button b = findViewById(id);
             if (b == null) {
                 continue;
@@ -348,32 +353,6 @@ public class WebRadioLayout extends RelativeLayout {
     private void stopRadioStream() {
         if (RadioStreamService.streamingMode == RadioStreamService.StreamingMode.RADIO) {
             RadioStreamService.stop(context);
-            AlarmWifiService.restoreAfterManualRadio(context);
-        }
-    }
-
-    private void startRadioStream(int radioStationIndex) {
-        int requestId = ++networkStartRequestId;
-        boolean wifiActivationPending = AlarmWifiService.prepareForManualRadio(context);
-        if (wifiActivationPending || !Utility.hasNetworkConnection(context)) {
-            AlarmWifiService.runWhenNetworkAvailable(
-                    context,
-                    () -> {
-                        if (requestId == networkStartRequestId) {
-                            RadioStreamService.startStream(context, radioStationIndex);
-                        }
-                    },
-                    () -> showNoDataConnection(requestId)
-            );
-        } else {
-            RadioStreamService.startStream(context, radioStationIndex);
-        }
-    }
-
-    private void showNoDataConnection(int requestId) {
-        if (requestId == networkStartRequestId) {
-            Toast.makeText(context, R.string.message_no_data_connection, Toast.LENGTH_LONG)
-                    .show();
         }
     }
 
@@ -385,29 +364,22 @@ public class WebRadioLayout extends RelativeLayout {
     private void toggleRadioStreamState(final int radioStationIndex) {
         boolean wasAlreadyPlaying = false;
         if (RadioStreamService.streamingMode == RadioStreamService.StreamingMode.RADIO) {
-            stopRadioStream();
+            RadioStreamService.stop(context);
             wasAlreadyPlaying = true;
         }
 
-        boolean wifiActivationPending = AlarmWifiService.prepareForManualRadio(context);
-        if (wifiActivationPending || (settings.radioStreamActivateWiFi
-                && !Utility.hasNetworkConnection(context))) {
-            startRadioStream(radioStationIndex);
-            return;
-        }
-
         if (Utility.hasNetworkConnection(context)) {
-            // is stream was already playing before, don't ask again? (but what if user switched from wifi to 3g since stream start?)
+            // is stream was already playing before, don't ask again? (but what if user switched from Wi-Fi to 3g since stream start?)
             if (Utility.hasFastNetworkConnection(context) || wasAlreadyPlaying) {
-                startRadioStream(radioStationIndex);
+                RadioStreamService.startStream(context, radioStationIndex);
             } else {
                 new AlertDialog.Builder(context, R.style.DialogTheme)
                         .setTitle(R.string.message_mobile_data_connection)
                         .setMessage(R.string.message_mobile_data_connection_confirmation)
-                        .setNegativeButton(android.R.string.no, (dialogInterface, i) -> hideSystemUI())
+                        .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> hideSystemUI())
                         .setIcon(R.drawable.ic_attention)
-                        .setPositiveButton(android.R.string.yes, (dialog, which) -> {
-                            startRadioStream(radioStationIndex);
+                        .setPositiveButton(android.R.string.ok, (dialog, which) -> {
+                            RadioStreamService.startStream(context, radioStationIndex);
                             hideSystemUI();
                         })
                         .show();
@@ -445,7 +417,6 @@ public class WebRadioLayout extends RelativeLayout {
 
     @Override
     protected void onDetachedFromWindow() {
-        networkStartRequestId++;
         super.onDetachedFromWindow();
         AppEventBus.removeListener(eventListener);
         unregisterAudioVolumeContentObserver();
@@ -475,7 +446,7 @@ public class WebRadioLayout extends RelativeLayout {
         if (spinner != null) {
             Drawable drawable = spinner.getIndeterminateDrawable();
             if (drawable != null) {
-                drawable.setColorFilter(accentColor, PorterDuff.Mode.SRC_ATOP);
+                drawable.setColorFilter(new PorterDuffColorFilter(accentColor, PorterDuff.Mode.SRC_ATOP));
             }
         }
     }
@@ -486,11 +457,6 @@ public class WebRadioLayout extends RelativeLayout {
             return false;
         }
 
-        /*
-        if (Build.VERSION.SDK_INT >= 23) {
-            return audio.isStreamMute(AudioManager.STREAM_MUSIC);
-        }
-        */
         int currentVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
         return currentVolume == 0;
     }
@@ -543,17 +509,9 @@ public class WebRadioLayout extends RelativeLayout {
     }
 
     private void setShowConnectingHint(boolean showConnectingHint) {
-        setShowConnectingHint(showConnectingHint, false);
-    }
-
-    private void setShowConnectingHint(boolean showConnectingHint, boolean autoHide) {
         this.showConnectingHint = showConnectingHint;
         spinner.setVisibility(showConnectingHint ? View.VISIBLE : View.GONE);
         invalidate();
-
-        if (autoHide) {// hide animation after 10s if anything goes wrong
-            handler.postDelayed(hideConnectingHint, 10000);
-        }
     }
 
     @Override
@@ -597,15 +555,14 @@ public class WebRadioLayout extends RelativeLayout {
     }
 
 
-
     class AudioVolumeContentObserver extends ContentObserver {
 
-        private int previousVolume = -1;
         private boolean wasMuted;
 
         AudioVolumeContentObserver(Context context, Handler handler) {
             super(handler);
             AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            int previousVolume = -1;
             if (audio != null) {
                 previousVolume = audio.getStreamVolume(AudioManager.STREAM_MUSIC);
             }

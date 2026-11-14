@@ -37,6 +37,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -51,6 +53,7 @@ public class ThemePresetManager {
     public static final String PREF_ACTIVE_PRESET = "activeThemePreset";
 
     private static final Map<String, ThemePreset> PRESETS = new HashMap<>();
+    private static final Map<String, String> THEME_ASSET_MAP = new HashMap<>();
 
     // Halloween theme colors
     private static final int HALLOWEEN_PRIMARY = Color.rgb(255, 117, 24);
@@ -63,6 +66,12 @@ public class ThemePresetManager {
     private static final int CHRISTMAS_SECONDARY = Color.rgb(200, 168, 70);
     private static final int CHRISTMAS_PRIMARY_NIGHT = Color.rgb(156, 124, 56);
     private static final int CHRISTMAS_SECONDARY_NIGHT = Color.rgb(120, 95, 42);
+
+    // Belgium theme colors
+    private static final int BELGIUM_PRIMARY = Color.rgb(0x5D, 0xB8, 0xFF);
+    private static final int BELGIUM_SECONDARY = Color.rgb(0x36, 0xA2, 0xCF);
+    private static final int BELGIUM_PRIMARY_NIGHT = Color.rgb(0x3D, 0x7A, 0xA9);
+    private static final int BELGIUM_SECONDARY_NIGHT = Color.rgb(0x1D, 0x58, 0x70);
 
     static {
         ThemePreset halloweenAnalog = new ThemePreset(
@@ -123,10 +132,31 @@ public class ThemePresetManager {
                 ParticleEffect.GOLDEN_STARS
         );
 
+        ThemePreset belgiumAnalog = new ThemePreset(
+                ThemePreset.PRESET_BELGIUM_ANALOG,
+                "Belgium by night",
+                ClockLayoutType.ANALOG,
+                BELGIUM_PRIMARY,
+                BELGIUM_SECONDARY,
+                Settings.BACKGROUND_IMAGE,
+                "bg_belgium",
+                50, // translucent card
+                "",
+                ParticleEffect.GOLDEN_STARS,
+                0.25f, // sky region (upper 25%)
+                1.4f,  // star size scale
+                50     // 50 stars
+        );
+
         PRESETS.put(halloweenAnalog.id, halloweenAnalog);
         PRESETS.put(halloweenDigital.id, halloweenDigital);
         PRESETS.put(xmasAnalog.id, xmasAnalog);
         PRESETS.put(xmasDigital.id, xmasDigital);
+        PRESETS.put(belgiumAnalog.id, belgiumAnalog);
+
+        THEME_ASSET_MAP.put(ThemePreset.PRESET_BELGIUM_ANALOG, "themes/belgium.json");
+        THEME_ASSET_MAP.put(ThemePreset.PRESET_CHRISTMAS_ANALOG, "themes/christmas.json");
+        THEME_ASSET_MAP.put(ThemePreset.PRESET_HALLOWEEN_ANALOG, "themes/christmas.json");
     }
 
     public static SharedPreferences getPreferences(Context context) {
@@ -134,9 +164,6 @@ public class ThemePresetManager {
     }
 
     public static boolean isUserEligible(Context context) {
-        if (BuildConfig.FLAVOR == "noGms") {
-            return true;
-        }
         PurchaseManager pm = PurchaseManager.getInstance(context);
         return pm.isPurchased(PurchaseManager.ITEM_ONE_YEAR_SUBSCRIPTION)
                 || pm.isPurchased(PurchaseManager.ITEM_PRO)
@@ -205,7 +232,7 @@ public class ThemePresetManager {
                 editor.remove("font");
                 editor.putInt("clockBackgroundTransparency", 100);
                 editor.putBoolean("theme_animation_enabled", false);
-                editor.putString("theme_particle_effect", String.valueOf(ParticleEffect.NONE.getValue()));
+                editor.putString("theme_particle_effect", ParticleEffect.toPreferenceValue(ParticleEffect.SNOW));
             }
             editor.putString(PREF_ACTIVE_PRESET, ThemePreset.PRESET_NONE);
         } else {
@@ -243,7 +270,7 @@ public class ThemePresetManager {
             editor.remove("font");
             editor.putInt("clockBackgroundTransparency", 100);
             editor.putBoolean("theme_animation_enabled", false);
-            editor.putString("theme_particle_effect", String.valueOf(ParticleEffect.NONE.getValue()));
+            editor.putString("theme_particle_effect", ParticleEffect.toPreferenceValue(ParticleEffect.SNOW));
         } else {
             ThemePreset preset = getPreset(activeThemeId);
             if (preset != null) {
@@ -281,6 +308,9 @@ public class ThemePresetManager {
         if (ThemePreset.PRESET_HALLOWEEN_ANALOG.equals(preset.id) || ThemePreset.PRESET_HALLOWEEN_DIGITAL.equals(preset.id)) {
             editor.putInt("primaryColorNight", HALLOWEEN_PRIMARY_NIGHT);
             editor.putInt("secondaryColorNight", HALLOWEEN_SECONDARY_NIGHT);
+        } else if (ThemePreset.PRESET_BELGIUM_ANALOG.equals(preset.id)) {
+            editor.putInt("primaryColorNight", BELGIUM_PRIMARY_NIGHT);
+            editor.putInt("secondaryColorNight", BELGIUM_SECONDARY_NIGHT);
         } else {
             editor.putInt("primaryColorNight", CHRISTMAS_PRIMARY_NIGHT);
             editor.putInt("secondaryColorNight", CHRISTMAS_SECONDARY_NIGHT);
@@ -291,7 +321,7 @@ public class ThemePresetManager {
         editor.putInt("clockBackgroundTransparency", preset.clockBackgroundTransparency);
         editor.putBoolean("autoAccentColor", false);
         editor.putBoolean("theme_animation_enabled", true);
-        editor.putString("theme_particle_effect", String.valueOf(preset.particleEffect.getValue()));
+        editor.putString("theme_particle_effect", ParticleEffect.toPreferenceValue(preset.particleEffect));
 
         if (!Utility.isEmpty(preset.fontPath)) {
             editor.putString("font", preset.fontPath);
@@ -307,34 +337,14 @@ public class ThemePresetManager {
             settings.setTextureId(Settings.TEXTURE_NONE, i);
         }
 
-        if (ThemePreset.PRESET_CHRISTMAS_ANALOG.equals(preset.id) || ThemePreset.PRESET_HALLOWEEN_ANALOG.equals(preset.id)) {
-            for (AnalogClockConfig.Style style : AnalogClockConfig.Style.values()) {
-                AnalogClockConfig config = new AnalogClockConfig(context, style);
-                config.decoration = AnalogClockConfig.Decoration.GOLD;
-                config.digitPosition = 0.82f;
-                config.digitStyle = AnalogClockConfig.DigitStyle.ARABIC;
-                config.emphasizeHour12 = true;
-                config.showSecondHand = true;
-                config.handShape = AnalogClockConfig.HandShape.TRIANGLE;
-                config.handLengthHours = 0.72f;
-                config.handLengthMinutes = 0.92f;
-                config.handWidthHours = 0.045f;
-                config.handWidthMinutes = 0.03f;
-                config.highlightQuarterOfHour = true;
-                config.innerCircleRadius = 0.05f;
-                config.tickStartMinutes = 0.94f;
-                config.tickStyleMinutes = AnalogClockConfig.TickStyle.DASH;
-                config.tickLengthMinutes = 0.04f;
-                config.tickStartHours = 0.92f;
-                config.tickWidthHours = 0.025f;
-                config.tickWidthMinutes = 0.01f;
-                config.tickStyleHours = AnalogClockConfig.TickStyle.CIRCLE;
-                config.tickLengthHours = 0.06f;
-                config.outerCircleRadius = 1.0f;
-                config.outerCircleWidth = 0.02f;
-                config.fontSize = 0.085f;
-                config.fontUri = "file:///android_asset/fonts/dancingscript_regular.ttf";
-                config.save();
+        String assetPath = THEME_ASSET_MAP.get(preset.id);
+        if (!Utility.isEmpty(assetPath)) {
+            String json = loadJsonFromAsset(context, assetPath);
+            if (!Utility.isEmpty(json)) {
+                for (AnalogClockConfig.Style style : AnalogClockConfig.Style.values()) {
+                    AnalogClockConfig config = new AnalogClockConfig(context, style);
+                    config.importFromJson(json);
+                }
             }
         }
         
@@ -344,6 +354,17 @@ public class ThemePresetManager {
         // Save initial profile JSON snapshot
         saveThemeProfileJson(context, prefs, editor, preset.id);
         editor.apply();
+    }
+
+    private static String loadJsonFromAsset(Context context, String filename) {
+        try (InputStream is = context.getAssets().open(filename)) {
+            byte[] buffer = new byte[is.available()];
+            int size = is.read(buffer);
+            return new String(buffer, 0, size, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to load asset JSON: " + filename, e);
+            return null;
+        }
     }
 
     private static void saveThemeProfileJson(Context context, SharedPreferences prefs, SharedPreferences.Editor editor, String themeId) {
@@ -572,7 +593,11 @@ public class ThemePresetManager {
                         Log.d(TAG, "restorePreferencesFromJson() - key: " + key + " type: " + type + " value: " + valueObj);
                     }
 
-                    if ("boolean".equals(type) || valueObj instanceof Boolean) {
+                    if ("theme_particle_effect".equals(key)) {
+                        String rawVal = String.valueOf(valueObj);
+                        ParticleEffect effect = ParticleEffect.fromValue(rawVal, ParticleEffect.SNOW);
+                        editor.putString(key, ParticleEffect.toPreferenceValue(effect));
+                    } else if ("boolean".equals(type) || valueObj instanceof Boolean) {
                         editor.putBoolean(key, valuesObj.getBoolean(key));
                     } else if ("int".equals(type) || (valueObj instanceof Integer && type == null)) {
                         editor.putInt(key, valuesObj.getInt(key));

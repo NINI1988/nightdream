@@ -37,6 +37,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.Rect;
 import android.graphics.RenderEffect;
 import android.graphics.Shader;
@@ -76,6 +77,8 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
 import com.firebirdberlin.nightdream.Config;
+import com.firebirdberlin.nightdream.MNotificationListener;
+import com.firebirdberlin.nightdream.ui.background.BackgroundBurnInProtectionHelper;
 import com.firebirdberlin.nightdream.Graphics;
 import com.firebirdberlin.nightdream.LightSensorEventListener;
 import com.firebirdberlin.nightdream.R;
@@ -143,9 +146,6 @@ public class NightDreamUI {
     private final ImageView menuIcon;
     private final ImageView nightModeIcon;
     private final ImageView radioIcon;
-    private final View weatherMenuIcon;
-    private final View smartHomeMenuIcon;
-    private final WifiStatusView wifiStatusView;
     private final FrameLayout exifLayoutContainer;
     private final ClockLayoutContainer clockLayoutContainer;
     private final ClockLayout clockLayout;
@@ -169,6 +169,7 @@ public class NightDreamUI {
     };
     private final BatteryIconView batteryIconView;
     private final MAudioManager AudioManage;
+    private final BackgroundBurnInProtectionHelper backgroundBurnInHelper;
     private final ScaleGestureDetector mScaleDetector;
     private final GestureDetector mGestureDetector;
     private int lastPointerCount = 0;
@@ -473,9 +474,6 @@ public class NightDreamUI {
         notificationStatusBar = rootView.findViewById(R.id.notificationstatusbar);
         parentLayout = rootView.findViewById(R.id.background_group);
         radioIcon = rootView.findViewById(R.id.radio_icon);
-        weatherMenuIcon = rootView.findViewById(R.id.icon_weather_forecast);
-        smartHomeMenuIcon = rootView.findViewById(R.id.torch_icon);
-        wifiStatusView = rootView.findViewById(R.id.wifiStatusView);
         sidePanelLeft = rootView.findViewById(R.id.side_menu_left);
         sidePanelRight = rootView.findViewById(R.id.side_menu_right);
 
@@ -485,6 +483,7 @@ public class NightDreamUI {
         snowOverlayView = rootView.findViewById(R.id.snow_overlay_view);
         starsOverlayView = rootView.findViewById(R.id.stars_overlay_view);
         activeBackgroundImage = 1;
+        backgroundBurnInHelper = new BackgroundBurnInProtectionHelper(mContext, handler);
 
         UserInteractionObserver bottomPanelUserInteractionObserver = this::resetAlarmClockHideDelay;
         bottomPanelLayout.setUserInteractionObserver(bottomPanelUserInteractionObserver);
@@ -636,9 +635,7 @@ public class NightDreamUI {
 
             //Update Notifications in ClockLayout
             if (Settings.showNotification(mContext)) {
-                Intent i = new Intent(Config.ACTION_NOTIFICATION_LISTENER);
-                i.putExtra("command", "list");
-                mContext.sendBroadcast(i);
+                MNotificationListener.requestNotificationList(mContext);
             }
 
             controlsVisible = true;
@@ -686,9 +683,6 @@ public class NightDreamUI {
         mainFrame.post(this::configureSafeRect);
 
         settings.reload();
-        weatherMenuIcon.setVisibility(settings.showWeatherMenu ? View.VISIBLE : View.GONE);
-        smartHomeMenuIcon.setVisibility(settings.showSmartHomeMenu ? View.VISIBLE : View.GONE);
-        wifiStatusView.setDisplayEnabled(settings.showWifiStatus);
         notificationStatusBar.removeAllViews();
         notificationStatusBar.setClickable(Settings.useNotificationStatusBar(mContext));
 
@@ -847,6 +841,17 @@ public class NightDreamUI {
                     break;
             }
         }
+
+        int modeBg = settings.getBackgroundMode();
+        boolean isImageMode = (modeBg == Settings.BACKGROUND_IMAGE || modeBg == Settings.BACKGROUND_SLIDESHOW)
+                && !(mode == 0 && settings.hideBackgroundImage)
+                && !Utility.isLowRamDevice(mContext);
+        boolean isZoomInActive = (modeBg == Settings.BACKGROUND_SLIDESHOW && settings.background_zoomin);
+        if (isImageMode) {
+            backgroundBurnInHelper.start(backgroundImages[activeBackgroundImage], isZoomInActive);
+        } else {
+            backgroundBurnInHelper.reset(backgroundImages[activeBackgroundImage]);
+        }
     }
 
     private void initLightSensor() {
@@ -930,8 +935,7 @@ public class NightDreamUI {
 
         batteryIconView.setColor(textColor);
         batteryIconView.setVisibility(View.VISIBLE);
-        wifiStatusView.setStatusColor(textColor);
-        menuIcon.setColorFilter(textColor, PorterDuff.Mode.SRC_ATOP);
+        menuIcon.setColorFilter(new PorterDuffColorFilter(textColor, PorterDuff.Mode.SRC_ATOP));
 
         // colorize icons in the side panels
         sidePanelLeft.setAccentColor(accentColor);
@@ -963,7 +967,7 @@ public class NightDreamUI {
         int textColor = getSecondaryColor();
         final boolean webRadioViewActive = bottomPanelLayout.isWebRadioViewActive();
         final int color = (webRadioViewActive ? accentColor : textColor);
-        radioIcon.setColorFilter(color, PorterDuff.Mode.SRC_ATOP);
+        radioIcon.setColorFilter(new PorterDuffColorFilter(color, PorterDuff.Mode.SRC_ATOP));
         Utility.setIconSize(mContext, radioIcon);
     }
 
@@ -1058,10 +1062,10 @@ public class NightDreamUI {
             }
         }
 
-        backgroundImages[activeBackgroundImage].setScaleX(1);
-        backgroundImages[activeBackgroundImage].setScaleY(1);
-        backgroundImages[activeBackgroundImage].setTranslationX(0);
-        backgroundImages[activeBackgroundImage].setTranslationY(0);
+        boolean isZoomInActive = (settings.getBackgroundMode() == Settings.BACKGROUND_SLIDESHOW && settings.background_zoomin);
+        backgroundBurnInHelper.applyZoomAndPosition(
+                backgroundImages[activeBackgroundImage], isZoomInActive
+        );
 
         AnimationSet animationSet = new AnimationSet(true);
 
@@ -1138,10 +1142,9 @@ public class NightDreamUI {
             });
         }
 
-        backgroundImages[activeBackgroundImage].setScaleX(1);
-        backgroundImages[activeBackgroundImage].setScaleY(1);
-        backgroundImages[activeBackgroundImage].setTranslationX(0);
-        backgroundImages[activeBackgroundImage].setTranslationY(0);
+        backgroundBurnInHelper.applyZoomAndPosition(
+                backgroundImages[activeBackgroundImage], isZoomInActive
+        );
         backgroundImages[activeBackgroundImage].bringToFront();
         backgroundImages[(activeBackgroundImage + 1) % 2].setZ(4);
         backgroundImages[activeBackgroundImage].setZ(5);
@@ -1290,9 +1293,11 @@ public class NightDreamUI {
         if (lightSensorEventListener != null) {
             lightSensorEventListener.unregister();
         }
+        backgroundBurnInHelper.stop();
     }
 
     public void onStop() {
+        backgroundBurnInHelper.stop();
         removeCallbacks(moveAround);
         removeCallbacks(hideAlarmClock);
         removeCallbacks(initClockLayout);
@@ -1329,6 +1334,10 @@ public class NightDreamUI {
             }
 
             postDelayed(moveAround, Utility.millisToTimeTick(20000));
+            boolean isZoomInActive = (settings.getBackgroundMode() == Settings.BACKGROUND_SLIDESHOW && settings.background_zoomin);
+            backgroundBurnInHelper.onConfigurationChanged(
+                    backgroundImages[activeBackgroundImage], isZoomInActive
+            );
             if (settings.getBackgroundMode() == Settings.BACKGROUND_SLIDESHOW) {
                 postBackgroundImageChange();
             }
@@ -1507,7 +1516,7 @@ public class NightDreamUI {
 
         // Dim down the entire screen uniformly using the top-level scrim
         if (backgroundScrim != null) {
-            float scrimAlpha = to_range(1.0f - v, 0.0f, 0.98f);
+            float scrimAlpha = to_range(1.0f - v, 0.0f, 0.70f);
             setAlpha(backgroundScrim, scrimAlpha, millis);
         }
     }
@@ -1586,6 +1595,7 @@ public class NightDreamUI {
                 backgroundImages[activeBackgroundImage].setImageDrawable(colorBlack);
                 exifLayoutContainer.setVisibility(View.GONE);
                 removeCallbacks(backgroundChange);
+                backgroundBurnInHelper.stop();
             }
         } else if ((new_mode != 0) && (current_mode == 0)) {
             restoreRingerMode();
@@ -1659,8 +1669,9 @@ public class NightDreamUI {
     public void updateThemeOverlays() {
         if (snowOverlayView == null || starsOverlayView == null) return;
 
+        boolean isEligible = ThemePresetManager.isUserEligible(mContext);
         SharedPreferences prefs = ThemePresetManager.getPreferences(mContext);
-        boolean animEnabled = prefs.getBoolean("theme_animation_enabled", true);
+        boolean animEnabled = isEligible && prefs.getBoolean("theme_animation_enabled", false);
         ParticleEffect particleEffect = ParticleEffect.fromPreference(prefs, "theme_particle_effect", ParticleEffect.SNOW);
 
         boolean snowEnabled = animEnabled && (particleEffect == ParticleEffect.SNOW);

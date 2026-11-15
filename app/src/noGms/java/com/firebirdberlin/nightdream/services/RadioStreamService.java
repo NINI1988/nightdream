@@ -109,6 +109,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
     static private int radioStationIndex;
     static private RadioStation radioStation;
     private static int manualRadioStartRequestId;
+    private int manualRadioWifiRequestId = manualRadioStartRequestId;
     private static long sleepTimeInMillis = 0L;
     private static String streamURL = "";
     private static long muteDelayInMillis = 0;
@@ -366,6 +367,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
                     break;
                 case ACTION_START_STREAM:
                     if (extras != null) {
+                        manualRadioWifiRequestId = manualRadioStartRequestId;
                         fadeInState.reset();
                         alarmTime = new SimpleTime(extras);
                         radioStationIndex = intent.getIntExtra(EXTRA_RADIO_STATION_INDEX, -1);
@@ -559,7 +561,8 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
         radioStation = null;
         streamingMode = StreamingMode.INACTIVE;
 
-        if (wasManualRadio) {
+        // A newer start may already own WiFi before this stopped service is destroyed.
+        if (wasManualRadio && manualRadioWifiRequestId == manualRadioStartRequestId) {
             AlarmWifiService.restoreAfterManualRadio(this);
         }
         AppEventBus.publish(new OnRadioStreamStopped());

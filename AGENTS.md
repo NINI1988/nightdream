@@ -26,6 +26,8 @@
 
 ## Build Flavors
 
+- This project only needs `noGms`. Keep changes to upstream files as small and isolated as
+  possible to reduce merge conflicts.
 - There are two flavors: `full` (with Google Play Services) and `noGms`.
 - For local builds, installation and testing, use `noGms` by default. Ignore the `full`
   flavor unless the user explicitly asks for it.

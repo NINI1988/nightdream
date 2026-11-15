@@ -68,6 +68,7 @@ import com.firebirdberlin.nightdream.NightDreamActivity;
 import com.firebirdberlin.nightdream.R;
 import com.firebirdberlin.nightdream.Settings;
 import com.firebirdberlin.nightdream.Utility;
+import com.firebirdberlin.nightdream.VolumeControl;
 import com.firebirdberlin.nightdream.events.AppEventBus;
 import com.firebirdberlin.nightdream.events.OnRadioStreamMetadataUpdated;
 import com.firebirdberlin.nightdream.events.OnRadioStreamReadyForPlayback;
@@ -120,6 +121,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
     private Settings settings = null;
     private SimpleTime alarmTime = null;
     private float currentVolume = 0.f;
+    private final VolumeControl.FadeInState fadeInState = new VolumeControl.FadeInState();
     private int currentStreamVolume = -1;
     private HttpStatusCheckTask statusCheckTask = null;
     private PlaylistRequestTask resolveStreamUrlTask = null;
@@ -180,6 +182,24 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
         }
 
         return radioStationIndex;
+    }
+
+    public static void stopFadeInForVolumeControl() {
+        RadioStreamService service = mRadioStreamService;
+        if (service == null || service.exoPlayer == null || !service.fadeInState.shouldFadeIn()) {
+            return;
+        }
+
+        AudioManager audio = (AudioManager) service.getSystemService(Context.AUDIO_SERVICE);
+        if (audio == null) return;
+        service.handler.removeCallbacks(service.fadeIn);
+        int stream = AudioManager.STREAM_MUSIC;
+        int volume = audio.getStreamVolume(stream);
+        audio.setStreamVolume(stream,
+                VolumeControl.effectiveVolume(volume, service.exoPlayer.getVolume()), 0);
+        service.currentVolume = 1.f;
+        service.exoPlayer.setVolume(1.f);
+        service.fadeInState.cancel();
     }
 
     public static RadioStation getCurrentRadioStation() {
@@ -328,6 +348,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
             switch (action) {
                 case ACTION_START:
                     if (extras != null) {
+                        fadeInState.reset();
                         alarmIsRunning = true;
                         streamingMode = StreamingMode.ALARM;
                         alarmTime = new SimpleTime(extras);
@@ -345,6 +366,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
                     break;
                 case ACTION_START_STREAM:
                     if (extras != null) {
+                        fadeInState.reset();
                         alarmTime = new SimpleTime(extras);
                         radioStationIndex = intent.getIntExtra(EXTRA_RADIO_STATION_INDEX, -1);
 
@@ -664,8 +686,10 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
                 Log.d(TAG, "The player is able to immediately play from its current position.");
 
                 AppEventBus.publish(new OnRadioStreamReadyForPlayback(radioStationIndex));
-                currentVolume = 0.f;
-                handler.postDelayed(fadeIn, muteDelayInMillis);
+                if (fadeInState.shouldFadeIn()) {
+                    currentVolume = 0.f;
+                    handler.postDelayed(fadeIn, muteDelayInMillis);
+                }
                 updateNotification(getResources().getString(R.string.radio_muting));
 
                 if (currentStreamType == AudioManager.STREAM_ALARM && alarmTime != null

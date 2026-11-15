@@ -18,24 +18,35 @@
 
 package com.firebirdberlin.nightdream.services;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.robolectric.Shadows.shadowOf;
 
+import android.app.job.JobInfo;
+import android.app.job.JobParameters;
 import android.app.job.JobScheduler;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.wifi.WifiManager;
+import android.os.Looper;
 
 import com.firebirdberlin.nightdream.Settings;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.android.controller.ServiceController;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.LooperMode;
+import org.robolectric.util.ReflectionHelpers;
+
+import java.time.Duration;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 28)
@@ -98,6 +109,54 @@ public class AlarmWifiServiceTest {
 
         assertNull(jobs.getPendingJob(com.firebirdberlin.nightdream.Config.JOB_ID_WIFI_SHUTDOWN));
         assertTrue(wifi.isWifiEnabled());
+    }
+
+    @Test
+    @LooperMode(LooperMode.Mode.PAUSED)
+    public void radioStartedBeforeAlarmShutdownKeepsWifiUntilRadioStops() {
+        int shutdownJobId = com.firebirdberlin.nightdream.Config.JOB_ID_WIFI_SHUTDOWN;
+        AlarmWifiService.prepareForAlarm(context);
+        assertTrue(wifi.isWifiEnabled());
+
+        AlarmWifiService.restoreAfterAlarm(context);
+        JobInfo alarmShutdown = jobs.getPendingJob(shutdownJobId);
+        assertNotNull(alarmShutdown);
+        assertEquals(30000L, alarmShutdown.getMinLatencyMillis());
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(29));
+        AlarmWifiService.prepareForManualRadio(context);
+        assertNull(jobs.getPendingJob(shutdownJobId));
+
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
+        // Deliver even a stale job to verify it cannot interrupt the active radio.
+        runWifiShutdownJob();
+        assertTrue(wifi.isWifiEnabled());
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(1));
+        assertTrue(wifi.isWifiEnabled());
+        assertNull(jobs.getPendingJob(shutdownJobId));
+
+        AlarmWifiService.restoreAfterManualRadio(context);
+        JobInfo radioShutdown = jobs.getPendingJob(shutdownJobId);
+        assertNotNull(radioShutdown);
+        assertEquals(30000L, radioShutdown.getMinLatencyMillis());
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(29));
+        assertTrue(wifi.isWifiEnabled());
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1));
+        runWifiShutdownJob();
+        assertFalse(wifi.isWifiEnabled());
+    }
+
+    private void runWifiShutdownJob() {
+        JobParameters parameters = ReflectionHelpers.newInstance(JobParameters.class);
+        ReflectionHelpers.setField(parameters, "jobId",
+                com.firebirdberlin.nightdream.Config.JOB_ID_WIFI_SHUTDOWN);
+        ServiceController<AlarmWifiService> controller =
+                Robolectric.buildService(AlarmWifiService.class).create();
+        try {
+            controller.get().onStartJob(parameters);
+        } finally {
+            controller.destroy();
+        }
     }
 
     @Test

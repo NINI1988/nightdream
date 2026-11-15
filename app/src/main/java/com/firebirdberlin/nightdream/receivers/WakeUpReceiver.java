@@ -149,7 +149,7 @@ public class WakeUpReceiver extends BroadcastReceiver {
         Utility.logIntent(TAG, "onReceive()", intent);
         AlarmNotificationService.cancelNotification(context);
         AlarmNotificationService.cancelJob(context);
-        AlarmWifiService.cancelJob(context);
+        AlarmWifiService.cancelScheduledActivation(context);
         deleteCurrentlyActiveAlarm(context, intent);
         AlarmHandlerService.start(context);
 

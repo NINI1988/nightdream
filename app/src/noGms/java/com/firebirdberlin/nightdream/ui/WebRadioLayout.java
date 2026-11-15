@@ -364,14 +364,19 @@ public class WebRadioLayout extends RelativeLayout {
     private void toggleRadioStreamState(final int radioStationIndex) {
         boolean wasAlreadyPlaying = false;
         if (RadioStreamService.streamingMode == RadioStreamService.StreamingMode.RADIO) {
-            RadioStreamService.stop(context);
+            stopRadioStream();
             wasAlreadyPlaying = true;
+        }
+
+        if (settings.radioStreamActivateWiFi && !Utility.hasNetworkConnection(context)) {
+            RadioStreamService.startManualRadioStream(context, radioStationIndex);
+            return;
         }
 
         if (Utility.hasNetworkConnection(context)) {
             // is stream was already playing before, don't ask again? (but what if user switched from Wi-Fi to 3g since stream start?)
             if (Utility.hasFastNetworkConnection(context) || wasAlreadyPlaying) {
-                RadioStreamService.startStream(context, radioStationIndex);
+                RadioStreamService.startManualRadioStream(context, radioStationIndex);
             } else {
                 new AlertDialog.Builder(context, R.style.DialogTheme)
                         .setTitle(R.string.message_mobile_data_connection)
@@ -379,7 +384,7 @@ public class WebRadioLayout extends RelativeLayout {
                         .setNegativeButton(android.R.string.cancel, (dialogInterface, i) -> hideSystemUI())
                         .setIcon(R.drawable.ic_attention)
                         .setPositiveButton(android.R.string.ok, (dialog, which) -> {
-                            RadioStreamService.startStream(context, radioStationIndex);
+                            RadioStreamService.startManualRadioStream(context, radioStationIndex);
                             hideSystemUI();
                         })
                         .show();

@@ -158,6 +158,7 @@ public class AlarmHandlerService extends BroadcastReceiver {
 
         if (RadioStreamService.streamingMode == RadioStreamService.StreamingMode.ALARM) {
             if (keepRadio) {
+                AlarmWifiService.transferAlarmToManualRadio(context);
                 RadioStreamService.switchToRadioMode(context);
             } else {
                 RadioStreamService.stop(context);

@@ -47,3 +47,10 @@ output-metadata.json
 .project
 .settings/
 .artifacts
+
+# My changes
+.android-user/
+.gradle-user/
+.metals
+gradle/gradle-daemon-jvm.properties
+TODO.md

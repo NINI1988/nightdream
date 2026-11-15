@@ -107,6 +107,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
     static RadioStreamService mRadioStreamService = null;
     static private int radioStationIndex;
     static private RadioStation radioStation;
+    private static int manualRadioStartRequestId;
     private static long sleepTimeInMillis = 0L;
     private static String streamURL = "";
     private static long muteDelayInMillis = 0;
@@ -203,7 +204,29 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
         Utility.startForegroundService(context, i);
     }
 
+    public static void startManualRadioStream(Context context, int radioStationIndex) {
+        Context appContext = context.getApplicationContext();
+        int requestId = ++manualRadioStartRequestId;
+        AlarmWifiService.runWhenManualRadioNetworkAvailable(
+                appContext,
+                () -> {
+                    if (requestId == manualRadioStartRequestId) {
+                        startStream(appContext, radioStationIndex);
+                    }
+                },
+                () -> {
+                    if (requestId == manualRadioStartRequestId) {
+                        AlarmWifiService.restoreAfterManualRadio(appContext);
+                        Toast.makeText(appContext, R.string.message_no_data_connection,
+                                Toast.LENGTH_LONG).show();
+                    }
+                }
+        );
+    }
+
     public static void stop(Context context) {
+        manualRadioStartRequestId++;
+        AlarmWifiService.restoreAfterManualRadio(context);
         Intent i = getStopIntent(context);
         context.stopService(i);
     }
@@ -482,6 +505,7 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
     @Override
     public void onDestroy() {
         Log.d(TAG, "onDestroy() called.");
+        boolean wasManualRadio = streamingMode == StreamingMode.RADIO;
         AppEventBus.removeListener(eventListener);
         sleepTimeInMillis = 0L;
 
@@ -513,6 +537,9 @@ public class RadioStreamService extends Service implements HttpStatusCheckTask.A
         radioStation = null;
         streamingMode = StreamingMode.INACTIVE;
 
+        if (wasManualRadio) {
+            AlarmWifiService.restoreAfterManualRadio(this);
+        }
         AppEventBus.publish(new OnRadioStreamStopped());
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             stopForeground(Service.STOP_FOREGROUND_DETACH);

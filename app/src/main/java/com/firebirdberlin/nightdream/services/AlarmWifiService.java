@@ -39,11 +39,13 @@ import com.firebirdberlin.nightdream.models.SimpleTime;
 
 public class AlarmWifiService extends JobService {
     private static final String TAG = AlarmWifiService.class.getSimpleName();
-    private static final String PREF_WIFI_CHANGED_BY_ALARM = "radioStreamWifiChangedByAlarm";
-    private static final String PREF_WIFI_CHANGED_BY_MANUAL_RADIO =
-            "radioStreamWifiChangedByManualRadio";
+    private static final String PREF_MANUAL_RADIO_ACTIVE = "manualRadioWifiActive";
+    private static final String PREF_ALARM_ACTIVE = "alarmWifiActive";
+    private static final String PREF_WIFI_WAS_ENABLED = "wifiWasEnabledBeforeRadioUse";
     private static final long NETWORK_CHECK_INTERVAL_MILLIS = 500L;
     private static final int MAX_NETWORK_CHECK_ATTEMPTS = 120;
+    private static final long WIFI_SHUTDOWN_DELAY_MILLIS = 30000L;
+    private static final Object WIFI_LOCK = new Object();
 
     public static void runWhenNetworkAvailable(
             @NonNull Context context,
@@ -57,6 +59,18 @@ public class AlarmWifiService extends JobService {
                 onTimeout,
                 0
         );
+    }
+
+    public static void runWhenManualRadioNetworkAvailable(
+            @NonNull Context context,
+            @NonNull Runnable onNetworkAvailable,
+            @NonNull Runnable onTimeout) {
+        boolean wifiActivationPending = prepareForManualRadio(context);
+        if (wifiActivationPending || !Utility.hasNetworkConnection(context)) {
+            runWhenNetworkAvailable(context, onNetworkAvailable, onTimeout);
+        } else {
+            onNetworkAvailable.run();
+        }
     }
 
     private static void waitForNetwork(
@@ -91,36 +105,48 @@ public class AlarmWifiService extends JobService {
             return false;
         }
 
-        return enableWifiIfNeeded(context, PREF_WIFI_CHANGED_BY_MANUAL_RADIO);
+        return acquireWifi(context, PREF_MANUAL_RADIO_ACTIVE);
     }
 
     public static void prepareForAlarm(Context context) {
         Settings settings = new Settings(context);
         if (settings.radioStreamActivateWiFi) {
-            enableWifiIfNeeded(context, PREF_WIFI_CHANGED_BY_ALARM);
+            acquireWifi(context, PREF_ALARM_ACTIVE);
         }
     }
 
-    private static boolean enableWifiIfNeeded(Context context, String changedStateKey) {
-        WifiManager wifiManager = (WifiManager) context.getApplicationContext()
-                .getSystemService(Context.WIFI_SERVICE);
-        if (wifiManager == null || wifiManager.isWifiEnabled()) {
-            return false;
+    public static void transferAlarmToManualRadio(Context context) {
+        Settings settings = new Settings(context);
+        if (settings.radioStreamActivateWiFi) {
+            acquireWifi(context, PREF_MANUAL_RADIO_ACTIVE);
         }
+    }
 
-        setChangedState(context, changedStateKey, true);
-        setWifiEnabled(context, true);
-        return true;
+    private static boolean acquireWifi(Context context, String ownerKey) {
+        synchronized (WIFI_LOCK) {
+            Context appContext = context.getApplicationContext();
+            SharedPreferences preferences = appContext.getSharedPreferences(Settings.PREFS_KEY, 0);
+            cancelShutdownJob(appContext);
+
+            boolean alreadyInUse = preferences.getBoolean(PREF_MANUAL_RADIO_ACTIVE, false)
+                    || preferences.getBoolean(PREF_ALARM_ACTIVE, false);
+            WifiManager wifiManager = (WifiManager) appContext.getSystemService(Context.WIFI_SERVICE);
+            if (!alreadyInUse && !preferences.contains(PREF_WIFI_WAS_ENABLED)) {
+                boolean wifiWasEnabled = wifiManager != null && wifiManager.isWifiEnabled();
+                preferences.edit().putBoolean(PREF_WIFI_WAS_ENABLED, wifiWasEnabled).apply();
+            }
+            preferences.edit().putBoolean(ownerKey, true).apply();
+
+            if (wifiManager == null || wifiManager.isWifiEnabled()) {
+                return false;
+            }
+            setWifiEnabled(appContext, true);
+            return true;
+        }
     }
 
     public static void restoreAfterManualRadio(Context context) {
-        Settings settings = new Settings(context);
-        boolean changedByRadio = getChangedState(context, PREF_WIFI_CHANGED_BY_MANUAL_RADIO);
-        if (settings.radioStreamActivateWiFi && settings.radioStreamWifiAfterAlarm != 2
-                && (settings.radioStreamWifiAfterAlarm == 0 || changedByRadio)) {
-            setWifiEnabled(context, false);
-        }
-        clearChangedState(context, PREF_WIFI_CHANGED_BY_MANUAL_RADIO);
+        releaseWifi(context, PREF_MANUAL_RADIO_ACTIVE);
     }
 
     public static void scheduleJob(Context context, SimpleTime nextAlarmTime) {
@@ -147,6 +173,11 @@ public class AlarmWifiService extends JobService {
     }
 
     public static void cancelJob(Context context) {
+        cancelScheduledActivation(context);
+        releaseWifi(context, PREF_ALARM_ACTIVE);
+    }
+
+    public static void cancelScheduledActivation(Context context) {
         JobScheduler jobScheduler = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
         if (jobScheduler != null) {
             jobScheduler.cancel(Config.JOB_ID_ALARM_WIFI);
@@ -154,26 +185,92 @@ public class AlarmWifiService extends JobService {
     }
 
     public static void restoreAfterAlarm(Context context) {
-        Settings settings = new Settings(context);
-        if (!settings.radioStreamActivateWiFi) {
-            clearChangedState(context, PREF_WIFI_CHANGED_BY_ALARM);
-            return;
+        releaseWifi(context, PREF_ALARM_ACTIVE);
+    }
+
+    private static void releaseWifi(Context context, String ownerKey) {
+        synchronized (WIFI_LOCK) {
+            Context appContext = context.getApplicationContext();
+            SharedPreferences preferences = appContext.getSharedPreferences(Settings.PREFS_KEY, 0);
+            if (!preferences.getBoolean(ownerKey, false)) {
+                return;
+            }
+
+            preferences.edit().remove(ownerKey).apply();
+            boolean stillInUse = preferences.getBoolean(PREF_MANUAL_RADIO_ACTIVE, false)
+                    || preferences.getBoolean(PREF_ALARM_ACTIVE, false);
+            if (!stillInUse && preferences.contains(PREF_WIFI_WAS_ENABLED)) {
+                scheduleWifiShutdown(appContext);
+            }
         }
-        if (settings.radioStreamWifiAfterAlarm == 2) {
-            clearChangedState(context, PREF_WIFI_CHANGED_BY_ALARM);
+    }
+
+    private static void scheduleWifiShutdown(Context context) {
+        Settings settings = new Settings(context);
+        SharedPreferences preferences = context.getSharedPreferences(Settings.PREFS_KEY, 0);
+        if (!settings.radioStreamActivateWiFi || settings.radioStreamWifiAfterAlarm == 2
+                || (settings.radioStreamWifiAfterAlarm == 1
+                && preferences.getBoolean(PREF_WIFI_WAS_ENABLED, true))) {
+            clearWifiSession(context);
             return;
         }
 
-        boolean changedByAlarm = getChangedState(context, PREF_WIFI_CHANGED_BY_ALARM);
-        if (settings.radioStreamWifiAfterAlarm == 0 || changedByAlarm) {
-            setWifiEnabled(context, false);
+        ComponentName serviceComponent = new ComponentName(context, AlarmWifiService.class);
+        JobInfo job = new JobInfo.Builder(Config.JOB_ID_WIFI_SHUTDOWN, serviceComponent)
+                .setPersisted(true)
+                .setMinimumLatency(WIFI_SHUTDOWN_DELAY_MILLIS)
+                .setOverrideDeadline(WIFI_SHUTDOWN_DELAY_MILLIS)
+                .build();
+        JobScheduler jobScheduler = (JobScheduler) context.getSystemService(
+                Context.JOB_SCHEDULER_SERVICE
+        );
+        if (jobScheduler == null
+                || jobScheduler.schedule(job) != JobScheduler.RESULT_SUCCESS) {
+            Log.e(TAG, "Unable to schedule WiFi shutdown");
         }
-        clearChangedState(context, PREF_WIFI_CHANGED_BY_ALARM);
+    }
+
+    private static void shutdownWifiIfUnused(Context context) {
+        synchronized (WIFI_LOCK) {
+            SharedPreferences preferences = context.getSharedPreferences(Settings.PREFS_KEY, 0);
+            boolean stillInUse = preferences.getBoolean(PREF_MANUAL_RADIO_ACTIVE, false)
+                    || preferences.getBoolean(PREF_ALARM_ACTIVE, false);
+            if (!stillInUse && preferences.contains(PREF_WIFI_WAS_ENABLED)) {
+                Settings settings = new Settings(context);
+                boolean shouldTurnOff = settings.radioStreamActivateWiFi
+                        && settings.radioStreamWifiAfterAlarm != 2
+                        && (settings.radioStreamWifiAfterAlarm == 0
+                        || !preferences.getBoolean(PREF_WIFI_WAS_ENABLED, true));
+                if (shouldTurnOff) {
+                    setWifiEnabled(context, false);
+                }
+                clearWifiSession(context);
+            }
+        }
+    }
+
+    private static void cancelShutdownJob(Context context) {
+        JobScheduler jobScheduler = (JobScheduler) context.getSystemService(
+                Context.JOB_SCHEDULER_SERVICE
+        );
+        if (jobScheduler != null) {
+            jobScheduler.cancel(Config.JOB_ID_WIFI_SHUTDOWN);
+        }
+    }
+
+    private static void clearWifiSession(Context context) {
+        context.getSharedPreferences(Settings.PREFS_KEY, 0).edit()
+                .remove(PREF_WIFI_WAS_ENABLED)
+                .apply();
     }
 
     @Override
     public boolean onStartJob(JobParameters params) {
-        prepareForAlarm(this);
+        if (params.getJobId() == Config.JOB_ID_WIFI_SHUTDOWN) {
+            shutdownWifiIfUnused(this);
+        } else {
+            prepareForAlarm(this);
+        }
         return false;
     }
 
@@ -197,17 +294,4 @@ public class AlarmWifiService extends JobService {
         }
     }
 
-    private static void setChangedState(Context context, String key, boolean changed) {
-        SharedPreferences preferences = context.getSharedPreferences(Settings.PREFS_KEY, 0);
-        preferences.edit().putBoolean(key, changed).apply();
-    }
-
-    private static boolean getChangedState(Context context, String key) {
-        return context.getSharedPreferences(Settings.PREFS_KEY, 0).getBoolean(key, false);
-    }
-
-    private static void clearChangedState(Context context, String key) {
-        SharedPreferences preferences = context.getSharedPreferences(Settings.PREFS_KEY, 0);
-        preferences.edit().remove(key).apply();
-    }
 }

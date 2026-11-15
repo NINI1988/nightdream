@@ -37,6 +37,7 @@
 
 ## Coding Standards & Utilities
 - Don't exceed a line length of 100 characters.
+- Reduce complexity of methods and classes. Split large and deeply nested methods into functional blocks.  
 - Add {} even for one line statements, except for return statements., e.g. 
 ```java
   if (condition) {
@@ -77,6 +78,8 @@
   values of new public methods.
 
 - **Comments**: Write comments in English and only where the "why" is not obvious.
+
+- **Lambdas**: Use lambda expressions instead of anonymous inner classes (e.g. `new Runnable()`, `new Comparator()`) when implementing functional interfaces.
 
 ## Threading & Lifecycle
 

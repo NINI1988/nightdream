@@ -14,7 +14,6 @@ gen/
 
 # Gradle files
 .gradle/
-.gradle-user/
 build/
 /*/build/
 
@@ -47,8 +46,11 @@ output-metadata.json
 .classpath
 .project
 .settings/
+.artifacts
 
-.metals/
-.vscode/
+# My changes
 .android-user/
+.gradle-user/
+.metals
 gradle/gradle-daemon-jvm.properties
+TODO.md

@@ -42,6 +42,7 @@ public class SettingsTest {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public Set<String> getStringSet(String key, Set<String> defValues) {
             Object val = map.get(key);
             return val instanceof Set ? (Set<String>) val : defValues;
@@ -171,5 +172,31 @@ public class SettingsTest {
 
         Assert.assertEquals(0.2f, settings.getNightModeBrightness(), 0.001f);
         Assert.assertEquals(0.2f, prefs.getFloat("nightModeBrightness", 0f), 0.001f);
+    }
+
+    @Test
+    public void testGetDefaultRssUrlGermany() {
+        java.util.Locale defaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY);
+            TestSharedPreferences prefs = new TestSharedPreferences();
+            Settings settings = new Settings(prefs);
+            Assert.assertEquals("https://www.tagesschau.de/xml/rss2/", settings.rssURL);
+        } finally {
+            java.util.Locale.setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    public void testGetDefaultRssUrlNonGermany() {
+        java.util.Locale defaultLocale = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.US);
+            TestSharedPreferences prefs = new TestSharedPreferences();
+            Settings settings = new Settings(prefs);
+            Assert.assertEquals("", settings.rssURL);
+        } finally {
+            java.util.Locale.setDefault(defaultLocale);
+        }
     }
 }

@@ -44,6 +44,7 @@ import android.view.GestureDetector;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
@@ -170,8 +171,51 @@ public class NightDreamActivity extends BillingHelperActivity
     private Configuration prevConfig;
     private final long startTime = System.currentTimeMillis();
     private static final String UTTERANCE_ID_SPEAK_TIME = "UTTERANCE_ID_SPEAK_TIME";
+    private boolean volumeSwipeActive;
 
     GestureDetector.SimpleOnGestureListener mSimpleOnGestureListener = new GestureDetector.SimpleOnGestureListener() {
+        private VolumeControl volumeControl;
+
+        @Override
+        public boolean onDown(@NonNull MotionEvent e) {
+            volumeSwipeActive = false;
+            volumeControl = new VolumeControl(e.getX(), e.getY(),
+                    findViewById(R.id.background_view).getWidth(),
+                    Utility.dpToPx(context, 48), Utility.dpToPx(context, 48),
+                    ViewConfiguration.get(context).getScaledTouchSlop(),
+                    Utility.dpToPx(context, 24));
+            return false;
+        }
+
+        @Override
+        public boolean onScroll(MotionEvent start, @NonNull MotionEvent event,
+                                float distanceX, float distanceY) {
+            if (volumeControl == null) return false;
+            if (event.getPointerCount() != 1) {
+                volumeControl.cancel();
+                return false;
+            }
+            if (start == null || nightDreamUI.isLocked()) return false;
+
+            int steps = volumeControl.move(event.getX(), event.getY());
+            if (!volumeControl.isActive()) return false;
+            volumeSwipeActive = true;
+
+            if (steps != 0) {
+                AudioManager audio = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                if (audio != null) {
+                    RadioStreamService.stopFadeInForVolumeControl();
+                    int direction = steps > 0
+                            ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+                    for (int i = 0; i < Math.abs(steps); i++) {
+                        audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction,
+                                AudioManager.FLAG_SHOW_UI);
+                    }
+                }
+            }
+            return false;
+        }
+
         @Override
         public void onLongPress(@NonNull MotionEvent e) {
             if (nightDreamUI.isLocked() || !mySettings.isSpeakTimeEnabled()) {
@@ -650,10 +694,21 @@ public class NightDreamActivity extends BillingHelperActivity
 
     @Override
     public boolean onTouch(View view, MotionEvent e) {
+        boolean wasVolumeSwipeActive = volumeSwipeActive;
+        boolean handled = mGestureDetector.onTouchEvent(e);
+        if (volumeSwipeActive) {
+            if (!wasVolumeSwipeActive) {
+                MotionEvent cancel = MotionEvent.obtain(e);
+                cancel.setAction(MotionEvent.ACTION_CANCEL);
+                nightDreamUI.onTouch(view, cancel);
+                cancel.recycle();
+            }
+            return true;
+        }
         if (e.getAction() == MotionEvent.ACTION_UP) {
             view.performClick();
         }
-        return mGestureDetector.onTouchEvent(e) || nightDreamUI.onTouch(view, e);
+        return handled || nightDreamUI.onTouch(view, e);
     }
 
     // click on the settings icon
